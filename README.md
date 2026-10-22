@@ -3,6 +3,8 @@
 Aplikacja na **Androida i iPhone'a** do podglądu kamer **Hikvision** i **Dahua**
 (kamery IP oraz kanały rejestratorów NVR/DVR).
 
+![Wygląd aplikacji](docs/wyglad.png)
+
 ## Funkcje
 - lista kamer obu marek, test połączenia (pokazuje model i firmware, sprawdza hasło),
 - podgląd na żywo RTSP (SD/HD, obsługa H.264 i H.265),

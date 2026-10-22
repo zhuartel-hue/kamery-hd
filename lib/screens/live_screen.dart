@@ -43,11 +43,18 @@ class _LiveScreenState extends State<LiveScreen> {
   void initState() {
     super.initState();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    // Odtwarzacz zgłasza też niegroźne ostrzeżenia (np. brak dekodowania sprzętowego,
+    // po którym przechodzi na programowe) - błąd pokazujemy tylko, gdy nie ma obrazu.
     _subs.add(_player.stream.width.listen((w) {
-      if (w != null && w > 0 && mounted) setState(() => _loading = false);
+      if (w != null && w > 0 && mounted) {
+        setState(() {
+          _loading = false;
+          _error = null;
+        });
+      }
     }));
     _subs.add(_player.stream.error.listen((e) {
-      if (!mounted || _snapshotMode) return;
+      if (!mounted || _snapshotMode || (_player.state.width ?? 0) > 0) return;
       setState(() {
         _loading = false;
         _error = 'Nie udało się odtworzyć RTSP. Sprawdź port RTSP i hasło '
@@ -306,6 +313,7 @@ class _PtzButtonState extends State<_PtzButton> {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: _pressed ? const Color(0xCCE0662B) : Colors.black54,
+          border: Border.all(color: Colors.white38),
         ),
         child: Icon(widget.icon, color: Colors.white, size: 30),
       ),
