@@ -6,7 +6,7 @@
         android:maxSdkVersion="28" />
 
     <application
-        android:label="Kamery HD"
+        android:label="AriView"
         android:usesCleartextTraffic="true"
         android:requestLegacyExternalStorage="true"
         android:name="${applicationName}"

@@ -17,7 +17,7 @@ class KameryApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Kamery HD',
+      title: 'AriView',
       debugShowCheckedModeBanner: false,
       locale: const Locale('pl'),
       supportedLocales: const [Locale('pl')],

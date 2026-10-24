@@ -1,4 +1,6 @@
-# Kamery HD
+# AriView
+
+![AriView](docs/logo.png)
 
 Aplikacja na **Androida i iPhone'a** do podglądu kamer **Hikvision** i **Dahua**
 (kamery IP oraz kanały rejestratorów NVR/DVR).
@@ -19,16 +21,16 @@ Aplikacja na **Androida i iPhone'a** do podglądu kamer **Hikvision** i **Dahua*
 Po każdej zmianie w kodzie GitHub sam buduje aplikację (zakładka **Actions**, ok. 15 minut).
 Gotowe pliki są w zakładce **Releases** (po prawej stronie repozytorium) → najnowsza wersja:
 
-- `KameryHD.apk` – Android
-- `KameryHD.ipa` – iPhone
+- `AriView.apk` – Android
+- `AriView.ipa` – iPhone
 
 ### Android
-1. Na telefonie otwórz repozytorium (zaloguj się na GitHub), wejdź w **Releases** i pobierz `KameryHD.apk`.
+1. Na telefonie otwórz repozytorium (zaloguj się na GitHub), wejdź w **Releases** i pobierz `AriView.apk`.
 2. Otwórz pobrany plik i zezwól na instalację z tego źródła.
 
 ### iPhone (darmowe Apple ID, bez Maca)
 1. Na komputerze (Windows lub Mac) zainstaluj **iTunes** (Windows: wersja ze strony Apple, nie ze Sklepu Microsoft) i **Sideloadly** – https://sideloadly.io
-2. Pobierz `KameryHD.ipa` z **Releases**.
+2. Pobierz `AriView.ipa` z **Releases**.
 3. Podłącz iPhone'a kablem, w Sideloadly przeciągnij plik `.ipa`, wpisz swoje Apple ID i kliknij **Start**.
 4. Na iPhonie: **Ustawienia → Ogólne → VPN i urządzenia** → zaufaj swojemu Apple ID.
 5. iOS 16 i nowszy: **Ustawienia → Prywatność i ochrona → Tryb dewelopera** → włącz (telefon się zrestartuje).

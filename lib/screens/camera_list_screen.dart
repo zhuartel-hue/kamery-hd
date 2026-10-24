@@ -5,6 +5,7 @@ import '../services/camera_api.dart';
 import '../services/camera_store.dart';
 import '../services/thumbnails.dart';
 import '../theme.dart';
+import '../widgets/wordmark.dart';
 import 'camera_edit_screen.dart';
 import 'grid_screen.dart';
 import 'live_screen.dart';
@@ -200,13 +201,7 @@ class _CameraListScreenState extends State<CameraListScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ShaderMask(
-              shaderCallback: (r) => Ocean.gradient.createShader(r),
-              child: const Text(
-                'Kamery HD',
-                style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5),
-              ),
-            ),
+            const AriViewWordmark(fontSize: 20),
             if (cameras.isNotEmpty)
               Text(
                 '${cameras.length} ${_plural(cameras.length)}'

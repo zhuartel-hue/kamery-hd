@@ -37,18 +37,19 @@ def draw(size, rounded):
     img = Image.alpha_composite(img, glow.filter(ImageFilter.GaussianBlur(14*s)))
 
     d = ImageDraw.Draw(img)
-    # korpus kamery
-    d.rounded_rectangle([34*s, 64*s, 132*s, 122*s], radius=18*s, fill=WHITE)
-    d.polygon([(132*s, 82*s), (160*s, 68*s), (160*s, 118*s), (132*s, 104*s)], fill=WHITE)
-    # obiektyw
-    d.ellipse([50*s, 72*s, 92*s, 114*s], fill=ABYSS)
-    d.ellipse([60*s, 82*s, 82*s, 104*s], fill=AQUA)
-    d.ellipse([64*s, 85*s, 71*s, 92*s], fill=WHITE)
-    # dioda nagrywania
-    d.ellipse([110*s, 74*s, 120*s, 84*s], fill=(255, 122, 89))
-    # uchwyt
-    d.rounded_rectangle([78*s, 122*s, 92*s, 146*s], radius=4*s, fill=WHITE)
-    d.rounded_rectangle([56*s, 142*s, 114*s, 154*s], radius=6*s, fill=WHITE)
+    # Logo AriView: litera „A”, w której poprzeczkę zastępuje obiektyw.
+    apex, left, right = (96*s, 30*s), (38*s, 160*s), (154*s, 160*s)
+    w = int(24*s)
+    d.line([apex, left], fill=WHITE, width=w)
+    d.line([apex, right], fill=WHITE, width=w)
+    r = w / 2
+    for x, y in (apex, left, right):
+        d.ellipse([x-r, y-r, x+r, y+r], fill=WHITE)
+    cx, cy = 96*s, 116*s
+    d.ellipse([cx-31*s, cy-31*s, cx+31*s, cy+31*s], fill=WHITE)
+    d.ellipse([cx-22*s, cy-22*s, cx+22*s, cy+22*s], fill=ABYSS)
+    d.ellipse([cx-13*s, cy-13*s, cx+13*s, cy+13*s], fill=AQUA)
+    d.ellipse([cx-9*s, cy-10*s, cx-2*s, cy-3*s], fill=WHITE)
     return img if rounded else img.convert("RGB")
 
 

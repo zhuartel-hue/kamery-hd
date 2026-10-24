@@ -55,11 +55,11 @@ jobs:
             echo "keyPassword=$KEYSTORE_PASSWORD"
           } > android/key.properties
       - run: flutter build apk --release --build-number ${{ github.run_number }}
-      - run: mv build/app/outputs/flutter-apk/app-release.apk KameryHD.apk
+      - run: mv build/app/outputs/flutter-apk/app-release.apk AriView.apk
       - uses: actions/upload-artifact@v4
         with:
           name: android
-          path: KameryHD.apk
+          path: AriView.apk
 
   ios:
     name: iPhone (IPA)
@@ -78,11 +78,11 @@ jobs:
           cd build/ios/iphoneos
           mkdir Payload
           cp -R Runner.app Payload/
-          zip -qry "$GITHUB_WORKSPACE/KameryHD.ipa" Payload
+          zip -qry "$GITHUB_WORKSPACE/AriView.ipa" Payload
       - uses: actions/upload-artifact@v4
         with:
           name: ios
-          path: KameryHD.ipa
+          path: AriView.ipa
 
   release:
     name: Publikacja do pobrania
@@ -95,11 +95,11 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: Kamery HD 1.0.${{ github.run_number }}
+          name: AriView 1.0.${{ github.run_number }}
           make_latest: true
           body: |
-            **Android:** pobierz `KameryHD.apk` na telefonie i otwórz.
-            **iPhone:** pobierz `KameryHD.ipa` na komputer i zainstaluj programem Sideloadly (instrukcja w README).
+            **Android:** pobierz `AriView.apk` na telefonie i otwórz.
+            **iPhone:** pobierz `AriView.ipa` na komputer i zainstaluj programem Sideloadly (instrukcja w README).
           files: |
-            KameryHD.apk
-            KameryHD.ipa
+            AriView.apk
+            AriView.ipa
