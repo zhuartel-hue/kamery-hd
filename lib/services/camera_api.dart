@@ -4,6 +4,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import '../models/camera.dart';
+import '../models/discovered_channel.dart';
 import '../models/recording.dart';
 import 'camera_http.dart';
 
@@ -80,6 +81,93 @@ class CameraApi {
     }
   }
 
+  /// Kanały rejestratora NVR/DVR (dla zwykłej kamery zwykle jeden).
+  Future<List<DiscoveredChannel>> discoverChannels() async {
+    if (camera.isHikvision) {
+      final r = await _call(() => _http.get('${camera.httpBase}/ISAPI/Streaming/channels'));
+      final channels = parseHikChannels(r.text);
+      // Stan kamer IP podaje tylko rejestrator; zwykła kamera zwraca tu 404.
+      Map<int, bool> status = const {};
+      try {
+        final st = await _call(() => _http.get('${camera.httpBase}/ISAPI/ContentMgmt/InputProxy/channels/status'));
+        status = parseHikChannelStatus(st.text);
+      } on CameraException {
+        // brak informacji o stanie - nie przeszkadza
+      }
+      return [for (final c in channels) c.withOnline(status[c.channel])];
+    }
+    final r = await _call(() => _http.get('${camera.httpBase}/cgi-bin/configManager.cgi?action=getConfig&name=ChannelTitle'));
+    final channels = parseDahuaChannelTitles(r.text);
+    Map<int, bool> status = const {};
+    try {
+      // Stan jest dodatkiem: jeśli firmware nie zrozumie zakodowanych nawiasów, lista
+      // kanałów i tak się pojawi, tylko bez informacji o podłączeniu.
+      final st = await _call(() => _http.get(
+          '${camera.httpBase}/cgi-bin/LogicDeviceManager.cgi?action=getCameraState&uniqueChannels[0]=-1'));
+      status = parseDahuaCameraState(st.text);
+    } on CameraException {
+      // zwykła kamera Dahua nie ma tej funkcji
+    }
+    return [for (final c in channels) c.withOnline(status[c.channel])];
+  }
+
+  /// Hikvision /ISAPI/Streaming/channels: identyfikatory 101, 201… to strumienie
+  /// główne kolejnych kanałów (102, 202… - pomocnicze, pomijamy).
+  static List<DiscoveredChannel> parseHikChannels(String xml) {
+    final result = <int, DiscoveredChannel>{};
+    for (final m in RegExp(r'<StreamingChannel[ >](.*?)</StreamingChannel>', dotAll: true).allMatches(xml)) {
+      final block = m.group(1)!;
+      final id = int.tryParse(_xmlTag(block, 'id') ?? '');
+      if (id == null || id % 100 != 1) continue;
+      final channel = id ~/ 100;
+      final name = _xmlTag(block, 'channelName') ?? '';
+      result[channel] = DiscoveredChannel(channel, name.isEmpty ? 'Kanał $channel' : name);
+    }
+    return result.values.toList()..sort((a, b) => a.channel.compareTo(b.channel));
+  }
+
+  /// Hikvision InputProxy/channels/status: id kanału IP i czy kamera jest online.
+  static Map<int, bool> parseHikChannelStatus(String xml) {
+    final result = <int, bool>{};
+    for (final m in RegExp(r'<InputProxyChannelStatus[ >](.*?)</InputProxyChannelStatus>', dotAll: true)
+        .allMatches(xml)) {
+      final id = int.tryParse(_xmlTag(m.group(1)!, 'id') ?? '');
+      final online = _xmlTag(m.group(1)!, 'online');
+      if (id != null && online != null) result[id] = online == 'true';
+    }
+    return result;
+  }
+
+  /// Dahua ChannelTitle: table.ChannelTitle[0].Name=… - kanały numerowane od 0.
+  static List<DiscoveredChannel> parseDahuaChannelTitles(String text) {
+    final result = <DiscoveredChannel>[];
+    for (final m in RegExp(r'^table\.ChannelTitle\[(\d+)\]\.Name=(.*?)\r?$', multiLine: true).allMatches(text)) {
+      final channel = int.parse(m.group(1)!) + 1;
+      final name = m.group(2)!.trim();
+      result.add(DiscoveredChannel(channel, name.isEmpty ? 'Kanał $channel' : name));
+    }
+    return result..sort((a, b) => a.channel.compareTo(b.channel));
+  }
+
+  /// Dahua getCameraState: states[i].channel (od 0) i connectionState.
+  static Map<int, bool> parseDahuaCameraState(String text) {
+    final channels = <int, int>{};
+    final states = <int, String>{};
+    for (final m in RegExp(r'^states\[(\d+)\]\.(channel|connectionState)=(.*?)\r?$', multiLine: true)
+        .allMatches(text)) {
+      final i = int.parse(m.group(1)!);
+      if (m.group(2) == 'channel') {
+        channels[i] = int.tryParse(m.group(3)!.trim()) ?? -1;
+      } else {
+        states[i] = m.group(3)!.trim();
+      }
+    }
+    return {
+      for (final i in channels.keys)
+        if (channels[i]! >= 0 && states[i] != null) channels[i]! + 1: states[i] == 'Connected',
+    };
+  }
+
   /// Lista nagrań z danego dnia (z rejestratora albo karty SD kamery).
   Future<List<Recording>> recordings(DateTime day) async {
     final from = DateTime(day.year, day.month, day.day);
@@ -121,8 +209,9 @@ class CameraApi {
     try {
       await _call(() => _http.get('$base?action=findFile&object=$object'
           '&condition.Channel=${camera.channel}'
-          '&condition.StartTime=${fmt(from)}&condition.EndTime=${fmt(to)}'
-          '&condition.Types[0]=dav'));
+          // Bez filtra condition.Types[0]=dav: Dart koduje nawiasy (%5B0%5D), czego część
+          // firmware'ów nie rozumie. Pliki inne niż wideo odrzuca parseDahuaFind.
+          '&condition.StartTime=${fmt(from)}&condition.EndTime=${fmt(to)}'));
       for (var page = 0; page < 20; page++) {
         final r = await _call(() => _http.get('$base?action=findNextFile&object=$object&count=100'));
         final items = parseDahuaFind(r.text);
@@ -161,14 +250,21 @@ class CameraApi {
   static List<Recording> parseDahuaFind(String text) {
     final starts = <int, DateTime>{};
     final ends = <int, DateTime>{};
-    for (final m in RegExp(r'^items\[(\d+)\]\.(StartTime|EndTime)=(.*)$', multiLine: true).allMatches(text)) {
+    final types = <int, String>{};
+    for (final m in RegExp(r'^items\[(\d+)\]\.(StartTime|EndTime|Type)=(.*?)\r?$', multiLine: true).allMatches(text)) {
+      final i = int.parse(m.group(1)!);
+      if (m.group(2) == 'Type') {
+        types[i] = m.group(3)!.trim().toLowerCase();
+        continue;
+      }
       final t = Recording.parseDeviceTime(m.group(3)!);
       if (t == null) continue;
-      (m.group(2) == 'StartTime' ? starts : ends)[int.parse(m.group(1)!)] = t;
+      (m.group(2) == 'StartTime' ? starts : ends)[i] = t;
     }
     return [
       for (final i in starts.keys.toList()..sort())
-        if (ends[i] != null) Recording(starts[i]!, ends[i]!),
+        // Zdjęcia (jpg) też są „plikami” rejestratora - zostawiamy tylko wideo.
+        if (ends[i] != null && (types[i] ?? 'dav') == 'dav') Recording(starts[i]!, ends[i]!),
     ];
   }
 

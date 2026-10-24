@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/camera.dart';
+import '../models/discovered_channel.dart';
 import '../services/camera_api.dart';
 import '../services/camera_store.dart';
 
@@ -27,6 +28,7 @@ class _CameraEditScreenState extends State<CameraEditScreen> {
 
   bool _showPass = false;
   bool _testing = false;
+  bool _discovering = false;
   String? _testResult;
   bool _testOk = false;
   String? _hostError;
@@ -67,6 +69,64 @@ class _CameraEditScreenState extends State<CameraEditScreen> {
       api.close();
     }
     if (mounted) setState(() => _testing = false);
+  }
+
+  /// Pyta rejestrator o kanały i dodaje wybrane kamery naraz.
+  Future<void> _discover() async {
+    if (!_validate()) return;
+    setState(() {
+      _discovering = true;
+      _testResult = 'Szukanie kamer w ${_c.httpBase} …';
+    });
+    final api = CameraApi(_c);
+    final List<DiscoveredChannel> found;
+    try {
+      found = await api.discoverChannels();
+    } on CameraException catch (e) {
+      if (mounted) {
+        setState(() {
+          _discovering = false;
+          _testOk = false;
+          _testResult = '✗ $e';
+        });
+      }
+      return;
+    } finally {
+      api.close();
+    }
+    if (!mounted) return;
+    setState(() => _discovering = false);
+    if (found.length <= 1) {
+      setState(() {
+        _testOk = true;
+        _testResult = '✓ To pojedyncza kamera (1 kanał) – wystarczy ją zapisać';
+        _testing = false;
+      });
+      return;
+    }
+    setState(() => _testResult = null);
+
+    final store = CameraStore();
+    final all = await store.load();
+    final existing = all.where((c) => c.host == _c.host && c.brand == _c.brand).map((c) => c.channel).toSet();
+    if (!mounted) return;
+    final selected = await showDialog<List<DiscoveredChannel>>(
+      context: context,
+      builder: (_) => _ChannelPicker(found: found, existing: existing),
+    );
+    if (selected == null || selected.isEmpty) return;
+
+    final prefix = _c.name.trim();
+    for (final ch in selected) {
+      all.add(Camera.fromJson({..._c.toJson(), 'id': null})
+        ..channel = ch.channel
+        ..name = prefix.isEmpty ? ch.name : '$prefix – ${ch.name}');
+    }
+    await store.saveAll(all);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Dodano kamery: ${selected.length}')));
+    Navigator.pop(context);
   }
 
   Future<void> _save() async {
@@ -147,6 +207,14 @@ class _CameraEditScreenState extends State<CameraEditScreen> {
                 )),
           ],
           const SizedBox(height: 20),
+          FilledButton.tonalIcon(
+            onPressed: _discovering || _testing ? null : _discover,
+            icon: _discovering
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.video_library_outlined),
+            label: const Text('Wykryj kamery w rejestratorze'),
+          ),
+          const SizedBox(height: 12),
           Row(children: [
             Expanded(
               child: OutlinedButton.icon(
@@ -194,5 +262,84 @@ class _CameraEditScreenState extends State<CameraEditScreen> {
       c.dispose();
     }
     super.dispose();
+  }
+}
+
+/// Okno z kanałami znalezionymi w rejestratorze. Podłączone kamery są zaznaczone,
+/// a te, które już są w aplikacji, pominięte.
+class _ChannelPicker extends StatefulWidget {
+  const _ChannelPicker({required this.found, required this.existing});
+  final List<DiscoveredChannel> found;
+  final Set<int> existing;
+
+  @override
+  State<_ChannelPicker> createState() => _ChannelPickerState();
+}
+
+class _ChannelPickerState extends State<_ChannelPicker> {
+  late final Set<int> _checked = {
+    for (final c in widget.found)
+      if (c.online != false && !widget.existing.contains(c.channel)) c.channel,
+  };
+
+  Iterable<DiscoveredChannel> get _available => widget.found.where((c) => !widget.existing.contains(c.channel));
+
+  String _status(DiscoveredChannel c) {
+    if (widget.existing.contains(c.channel)) return 'już dodana';
+    return switch (c.online) { true => 'podłączona', false => 'brak sygnału', null => '' };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final online = widget.found.where((c) => c.online == true).length;
+    return AlertDialog(
+      title: Text('Znaleziono kanałów: ${widget.found.length}'),
+      contentPadding: const EdgeInsets.fromLTRB(8, 16, 8, 0),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (online > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text('Podłączonych kamer: $online', style: Theme.of(context).textTheme.bodySmall),
+            ),
+          Flexible(
+            child: ListView(shrinkWrap: true, children: [
+              for (final c in widget.found)
+                CheckboxListTile(
+                  value: widget.existing.contains(c.channel) || _checked.contains(c.channel),
+                  onChanged: widget.existing.contains(c.channel)
+                      ? null
+                      : (v) => setState(() => v == true ? _checked.add(c.channel) : _checked.remove(c.channel)),
+                  secondary: Icon(
+                    Icons.circle,
+                    size: 12,
+                    color: switch (c.online) {
+                      true => Colors.green,
+                      false => Colors.grey,
+                      null => Colors.transparent,
+                    },
+                  ),
+                  title: Text(c.name),
+                  subtitle: Text(['Kanał ${c.channel}', _status(c)].where((s) => s.isNotEmpty).join(' · ')),
+                ),
+            ]),
+          ),
+        ]),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => setState(() => _checked.addAll(_available.map((c) => c.channel))),
+          child: const Text('Zaznacz wszystkie'),
+        ),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Anuluj')),
+        FilledButton(
+          onPressed: _checked.isEmpty
+              ? null
+              : () => Navigator.pop(context, widget.found.where((c) => _checked.contains(c.channel)).toList()),
+          child: Text('Dodaj (${_checked.length})'),
+        ),
+      ],
+    );
   }
 }

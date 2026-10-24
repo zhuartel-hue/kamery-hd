@@ -7,6 +7,7 @@ Aplikacja na **Androida i iPhone'a** do podglądu kamer **Hikvision** i **Dahua*
 
 ## Funkcje
 - lista kamer obu marek, test połączenia (pokazuje model i firmware, sprawdza hasło),
+- **automatyczne wykrywanie kamer w rejestratorze** – nazwy i stan kanałów, dodanie wszystkich naraz,
 - podgląd na żywo RTSP (SD/HD, obsługa H.264 i H.265),
 - tryb zdjęć – odświeżane klatki przez HTTP, gdy RTSP nie działa,
 - siatka – wszystkie kamery naraz,
@@ -51,6 +52,7 @@ na TestFlight / App Store.
 | Zdjęcie | `/ISAPI/Streaming/channels/101/picture` | `/cgi-bin/snapshot.cgi?channel=1` |
 | Info | `/ISAPI/System/deviceInfo` | `/cgi-bin/magicBox.cgi?action=getSystemInfo` |
 | PTZ | `PUT /ISAPI/PTZCtrl/channels/1/continuous` | `/cgi-bin/ptz.cgi?action=start&code=Up…` |
+| Kanały rejestratora | `/ISAPI/Streaming/channels` + `/ISAPI/ContentMgmt/InputProxy/channels/status` | `configManager.cgi?name=ChannelTitle` + `LogicDeviceManager.cgi?action=getCameraState` |
 | Wyszukiwanie nagrań | `POST /ISAPI/ContentMgmt/search` | `/cgi-bin/mediaFileFind.cgi` |
 | Odtwarzanie nagrań | `rtsp://…/Streaming/tracks/101?starttime=…` | `rtsp://…/cam/playback?channel=1&starttime=…` |
 

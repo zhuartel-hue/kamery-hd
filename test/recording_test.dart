@@ -43,7 +43,8 @@ void main() {
     const text = 'found=2\r\n'
         'items[0].Channel=0\r\nitems[0].StartTime=2026-10-24 06:00:00\r\nitems[0].EndTime=2026-10-24 07:00:00\r\n'
         'items[0].Type=dav\r\n'
-        'items[1].Channel=0\r\nitems[1].StartTime=2026-10-24 12:15:00\r\nitems[1].EndTime=2026-10-24 12:20:30\r\n';
+        'items[1].Channel=0\r\nitems[1].StartTime=2026-10-24 12:15:00\r\nitems[1].EndTime=2026-10-24 12:20:30\r\n'
+        'items[2].StartTime=2026-10-24 12:16:00\r\nitems[2].EndTime=2026-10-24 12:16:01\r\nitems[2].Type=jpg\r\n';
     expect(CameraApi.parseDahuaFind(text), [
       Recording(DateTime(2026, 10, 24, 6), DateTime(2026, 10, 24, 7)),
       Recording(DateTime(2026, 10, 24, 12, 15), DateTime(2026, 10, 24, 12, 20, 30)),
