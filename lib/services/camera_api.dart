@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import '../models/camera.dart';
+import '../models/recording.dart';
 import 'camera_http.dart';
 
 enum PtzMove { up, down, left, right, zoomIn, zoomOut }
@@ -76,6 +78,104 @@ class CameraApi {
     } else {
       await _dahuaPtz('stop', move);
     }
+  }
+
+  /// Lista nagrań z danego dnia (z rejestratora albo karty SD kamery).
+  Future<List<Recording>> recordings(DateTime day) async {
+    final from = DateTime(day.year, day.month, day.day);
+    final to = DateTime(day.year, day.month, day.day, 23, 59, 59);
+    final found = camera.isHikvision ? await _hikSearch(from, to) : await _dahuaSearch(from, to);
+    return Recording.merge(found);
+  }
+
+  Future<List<Recording>> _hikSearch(DateTime from, DateTime to) async {
+    final url = '${camera.httpBase}/ISAPI/ContentMgmt/search';
+    final result = <Recording>[];
+    String iso(DateTime t) => '${t.toIso8601String().substring(0, 19)}Z';
+    for (var page = 0; page < 20; page++) {
+      final body = '<?xml version="1.0" encoding="UTF-8"?><CMSearchDescription>'
+          '<searchID>${_uuid()}</searchID>'
+          '<trackList><trackID>${camera.channel}01</trackID></trackList>'
+          '<timeSpanList><timeSpan><startTime>${iso(from)}</startTime>'
+          '<endTime>${iso(to)}</endTime></timeSpan></timeSpanList>'
+          '<maxResults>50</maxResults>'
+          // „Postion” - tak (z literówką) nazywa to pole Hikvision.
+          '<searchResultPostion>${result.length}</searchResultPostion>'
+          '<metadataList><metadataDescriptor>//recordType.meta.std-cgi.com</metadataDescriptor></metadataList>'
+          '</CMSearchDescription>';
+      final r = await _call(() => _http.request('POST', url, body: body, contentType: 'application/xml'));
+      final (items, more) = parseHikSearch(r.text);
+      result.addAll(items);
+      if (!more || items.isEmpty) break;
+    }
+    return result;
+  }
+
+  Future<List<Recording>> _dahuaSearch(DateTime from, DateTime to) async {
+    final base = '${camera.httpBase}/cgi-bin/mediaFileFind.cgi';
+    String fmt(DateTime t) => Uri.encodeQueryComponent(t.toIso8601String().substring(0, 19).replaceFirst('T', ' '));
+    final created = await _call(() => _http.get('$base?action=factory.create'));
+    final object = RegExp(r'result=(\d+)').firstMatch(created.text)?.group(1);
+    if (object == null) throw CameraException('Rejestrator nie obsługuje wyszukiwania nagrań');
+    final result = <Recording>[];
+    try {
+      await _call(() => _http.get('$base?action=findFile&object=$object'
+          '&condition.Channel=${camera.channel}'
+          '&condition.StartTime=${fmt(from)}&condition.EndTime=${fmt(to)}'
+          '&condition.Types[0]=dav'));
+      for (var page = 0; page < 20; page++) {
+        final r = await _call(() => _http.get('$base?action=findNextFile&object=$object&count=100'));
+        final items = parseDahuaFind(r.text);
+        result.addAll(items);
+        if (items.length < 100) break;
+      }
+    } on CameraException catch (e) {
+      // Brak nagrań w tym dniu Dahua zgłasza jako błąd zapytania.
+      if (!e.message.contains('HTTP 400')) rethrow;
+    } finally {
+      // Sprzątanie po wyszukiwaniu - błędy tutaj nie są istotne dla użytkownika.
+      try {
+        await _http.get('$base?action=close&object=$object');
+        await _http.get('$base?action=destroy&object=$object');
+      } on Exception {
+        // ignorujemy
+      }
+    }
+    return result;
+  }
+
+  /// Wyniki ISAPI ContentMgmt/search: fragmenty i informacja, czy są kolejne strony.
+  static (List<Recording>, bool) parseHikSearch(String xml) {
+    final items = <Recording>[];
+    for (final m in RegExp(r'<searchMatchItem[^>]*>(.*?)</searchMatchItem>', dotAll: true).allMatches(xml)) {
+      final item = m.group(1)!;
+      final start = Recording.parseDeviceTime(_xmlTag(item, 'startTime') ?? '');
+      final end = Recording.parseDeviceTime(_xmlTag(item, 'endTime') ?? '');
+      if (start != null && end != null) items.add(Recording(start, end));
+    }
+    final status = _xmlTag(xml, 'responseStatusStrg') ?? '';
+    return (items, status.toUpperCase() == 'MORE');
+  }
+
+  /// Wyniki Dahua mediaFileFind findNextFile (format klucz=wartość).
+  static List<Recording> parseDahuaFind(String text) {
+    final starts = <int, DateTime>{};
+    final ends = <int, DateTime>{};
+    for (final m in RegExp(r'^items\[(\d+)\]\.(StartTime|EndTime)=(.*)$', multiLine: true).allMatches(text)) {
+      final t = Recording.parseDeviceTime(m.group(3)!);
+      if (t == null) continue;
+      (m.group(2) == 'StartTime' ? starts : ends)[int.parse(m.group(1)!)] = t;
+    }
+    return [
+      for (final i in starts.keys.toList()..sort())
+        if (ends[i] != null) Recording(starts[i]!, ends[i]!),
+    ];
+  }
+
+  static String _uuid() {
+    final r = Random.secure();
+    String hex(int n) => List.generate(n, (_) => r.nextInt(16).toRadixString(16)).join();
+    return '${hex(8)}-${hex(4)}-${hex(4)}-${hex(4)}-${hex(12)}'.toUpperCase();
   }
 
   Future<void> _hikContinuous(int pan, int tilt, int zoom) => _call(() => _http.put(

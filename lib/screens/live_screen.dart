@@ -8,6 +8,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import '../models/camera.dart';
 import '../services/camera_api.dart';
+import 'playback_screen.dart';
 
 /// Podgląd na żywo. Domyślnie RTSP (płynny obraz), awaryjnie „tryb zdjęć”, czyli
 /// kolejne klatki JPEG pobierane przez HTTP.
@@ -159,6 +160,16 @@ class _LiveScreenState extends State<LiveScreen> {
     }
   }
 
+  Future<void> _openPlayback() async {
+    _snapshotGeneration++;
+    await _player.stop();
+    if (!mounted) return;
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => PlaybackScreen(camera: _camera)));
+    if (!mounted) return;
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    _snapshotMode ? _snapshotLoop() : _startRtsp();
+  }
+
   void _toast(String text) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -243,6 +254,11 @@ class _LiveScreenState extends State<LiveScreen> {
               tooltip: _snapshotMode ? 'Wideo' : 'Tryb zdjęć',
               icon: Icon(_snapshotMode ? Icons.videocam : Icons.photo_library_outlined, color: Colors.white),
               onPressed: () => _setMode(!_snapshotMode),
+            ),
+            IconButton(
+              tooltip: 'Nagrania',
+              icon: const Icon(Icons.history, color: Colors.white),
+              onPressed: _openPlayback,
             ),
             IconButton(
               tooltip: 'Zapisz zdjęcie',

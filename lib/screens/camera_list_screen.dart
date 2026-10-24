@@ -5,6 +5,7 @@ import '../services/camera_store.dart';
 import 'camera_edit_screen.dart';
 import 'grid_screen.dart';
 import 'live_screen.dart';
+import 'playback_screen.dart';
 
 const hikColor = Color(0xFFC8102E);
 const dahuaColor = Color(0xFF0064B4);
@@ -58,6 +59,14 @@ class _CameraListScreenState extends State<CameraListScreen> {
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.history),
+            title: const Text('Nagrania'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _open(PlaybackScreen(camera: c));
+            },
+          ),
           ListTile(
             leading: const Icon(Icons.edit),
             title: const Text('Edytuj'),

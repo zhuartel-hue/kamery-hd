@@ -34,16 +34,39 @@ class Camera {
   bool get isHikvision => brand == Brand.hikvision;
   String get brandLabel => isHikvision ? 'Hikvision' : 'Dahua';
 
-  String rtspUrl({required bool main, bool maskPassword = false}) {
+  String _rtspBase({bool maskPassword = false}) {
     final pass = maskPassword ? '****' : Uri.encodeComponent(password);
     final auth = user.isEmpty ? '' : '${Uri.encodeComponent(user)}:$pass@';
-    final base = 'rtsp://$auth$host:$rtspPort';
+    return 'rtsp://$auth$host:$rtspPort';
+  }
+
+  String rtspUrl({required bool main, bool maskPassword = false}) {
+    final base = _rtspBase(maskPassword: maskPassword);
     if (isHikvision) {
       // 101 = kanał 1 główny, 102 = kanał 1 pomocniczy, 201 = kanał 2 główny...
       return '$base/Streaming/Channels/$channel${main ? '01' : '02'}';
     }
     return '$base/cam/realmonitor?channel=$channel&subtype=${main ? 0 : 1}';
   }
+
+  /// Odtwarzanie nagrań z rejestratora (lub karty SD kamery) od [from] do [to].
+  /// Oba systemy podają czas lokalny urządzenia; Hikvision dopisuje „Z” mimo to.
+  String playbackUrl(DateTime from, DateTime to) {
+    final base = _rtspBase();
+    if (isHikvision) {
+      return '$base/Streaming/tracks/${channel}01?starttime=${_hikTime(from)}&endtime=${_hikTime(to)}';
+    }
+    return '$base/cam/playback?channel=$channel&subtype=0'
+        '&starttime=${_dahuaTime(from)}&endtime=${_dahuaTime(to)}';
+  }
+
+  static String _two(int v) => v.toString().padLeft(2, '0');
+
+  static String _hikTime(DateTime t) =>
+      '${t.year}${_two(t.month)}${_two(t.day)}T${_two(t.hour)}${_two(t.minute)}${_two(t.second)}Z';
+
+  static String _dahuaTime(DateTime t) =>
+      '${t.year}_${_two(t.month)}_${_two(t.day)}_${_two(t.hour)}_${_two(t.minute)}_${_two(t.second)}';
 
   String get httpBase => 'http://$host${httpPort == 80 ? '' : ':$httpPort'}';
 
