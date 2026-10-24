@@ -16,6 +16,7 @@ class Camera {
     this.password = '',
     this.channel = 1,
     this.mainStream = false,
+    this.ptz = false,
   }) : id = id ?? _newId();
 
   final String id;
@@ -30,6 +31,9 @@ class Camera {
 
   /// false = strumień pomocniczy (SD), true = główny (HD).
   bool mainStream;
+
+  /// Kamera obrotowa - tylko wtedy pokazujemy sterowanie PTZ.
+  bool ptz;
 
   bool get isHikvision => brand == Brand.hikvision;
   String get brandLabel => isHikvision ? 'Hikvision' : 'Dahua';
@@ -89,6 +93,7 @@ class Camera {
         'password': password,
         'channel': channel,
         'mainStream': mainStream,
+        'ptz': ptz,
       };
 
   factory Camera.fromJson(Map<String, dynamic> j) => Camera(
@@ -102,6 +107,7 @@ class Camera {
         password: j['password'] as String? ?? '',
         channel: j['channel'] as int? ?? 1,
         mainStream: j['mainStream'] as bool? ?? false,
+        ptz: j['ptz'] as bool? ?? false,
       );
 
   static String _newId() {

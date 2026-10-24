@@ -34,6 +34,12 @@ class Thumbnails {
     changes.value++;
   }
 
+  static void fail(String id, String message) {
+    _errors[id] = message;
+    _fetched[id] = DateTime.now();
+    changes.value++;
+  }
+
   static void request(Camera camera) {
     final t = _fetched[camera.id];
     if (isLoading(camera.id) || (t != null && DateTime.now().difference(t) < maxAge)) return;

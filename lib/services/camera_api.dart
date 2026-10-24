@@ -56,6 +56,21 @@ class CameraApi {
     return b;
   }
 
+  /// Czy kamera jest obrotowa (obsługuje PTZ). Błąd lub brak funkcji = nie.
+  Future<bool> detectPtz() async {
+    try {
+      if (camera.isHikvision) {
+        final r = await _call(() => _http.get('${camera.httpBase}/ISAPI/PTZCtrl/channels/${camera.channel}/capabilities'));
+        return r.text.contains('PTZChanelCap') || r.text.contains('PTZChannelCap') || r.text.contains('ContinuousPanTiltSpace');
+      }
+      final r = await _call(() => _http.get(
+          '${camera.httpBase}/cgi-bin/ptz.cgi?action=getCurrentProtocolCaps&channel=${camera.channel - 1}'));
+      return r.text.contains('caps.') && !r.text.contains('caps.Pan=false');
+    } on CameraException {
+      return false;
+    }
+  }
+
   Future<void> ptzStart(PtzMove move) async {
     if (camera.isHikvision) {
       final s = _hikSpeed;

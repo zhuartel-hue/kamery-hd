@@ -61,8 +61,9 @@ class _CameraEditScreenState extends State<CameraEditScreen> {
     final api = CameraApi(_c);
     try {
       final info = await api.deviceInfo();
+      _c.ptz = await api.detectPtz();
       _testOk = true;
-      _testResult = '✓ $info';
+      _testResult = '✓ $info${_c.ptz ? ' · kamera obrotowa (PTZ)' : ''}';
     } on CameraException catch (e) {
       _testOk = false;
       _testResult = '✗ $e';
@@ -121,6 +122,7 @@ class _CameraEditScreenState extends State<CameraEditScreen> {
     for (final ch in selected) {
       all.add(Camera.fromJson({..._c.toJson(), 'id': null})
         ..channel = ch.channel
+        ..ptz = false
         ..name = prefix.isEmpty ? ch.name : '$prefix – ${ch.name}');
     }
     await store.saveAll(all);
@@ -191,7 +193,14 @@ class _CameraEditScreenState extends State<CameraEditScreen> {
               selected: {_c.mainStream},
               onSelectionChanged: (s) => setState(() => _c.mainStream = s.first),
             ),
-            const SizedBox(height: 12),
+            SwitchListTile(
+              contentPadding: const EdgeInsets.only(left: 4),
+              title: const Text('Kamera obrotowa (PTZ)'),
+              subtitle: const Text('Pokaż sterowanie obrotem i zoomem'),
+              value: _c.ptz,
+              onChanged: (v) => setState(() => _c.ptz = v),
+            ),
+            const SizedBox(height: 4),
             SelectableText(
               preview.rtspUrl(main: preview.mainStream, maskPassword: true),
               style: TextStyle(fontFamily: 'monospace', fontSize: 11, color: scheme.onSurfaceVariant),

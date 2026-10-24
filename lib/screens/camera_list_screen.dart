@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/camera.dart';
+import '../services/camera_api.dart';
 import '../services/camera_store.dart';
 import '../services/thumbnails.dart';
 import '../theme.dart';
@@ -164,17 +165,6 @@ class _CameraListScreenState extends State<CameraListScreen> {
   Widget build(BuildContext context) {
     final cameras = _cameras;
     return Scaffold(
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: cameras == null || cameras.isEmpty
-          ? null
-          : SizedBox(
-              width: 220,
-              child: GradientButton(
-                icon: Icons.add,
-                label: 'Dodaj kamerę',
-                onPressed: () => _open(const CameraEditScreen()),
-              ),
-            ),
       body: cameras == null
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -187,9 +177,9 @@ class _CameraListScreenState extends State<CameraListScreen> {
                   else
                     for (final g in _Group.of(cameras)) ...[
                       SliverToBoxAdapter(child: _sectionHeader(context, g)),
-                      _grid(g),
+                      _feed(g),
                     ],
-                  const SliverToBoxAdapter(child: SizedBox(height: 110)),
+                  const SliverToBoxAdapter(child: SizedBox(height: 40)),
                 ],
               ),
             ),
@@ -228,14 +218,19 @@ class _CameraListScreenState extends State<CameraListScreen> {
       ),
       actions: [
         if (cameras.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: IconButton.filledTonal(
-              tooltip: 'Wszystkie kamery',
-              icon: const Icon(Icons.grid_view_rounded),
-              onPressed: () => _open(GridScreen(cameras: cameras)),
-            ),
+          IconButton.filledTonal(
+            tooltip: 'Siatka',
+            icon: const Icon(Icons.grid_view_rounded),
+            onPressed: () => _open(GridScreen(cameras: cameras)),
           ),
+        Padding(
+          padding: const EdgeInsets.only(left: 8, right: 12),
+          child: _GradientIconButton(
+            tooltip: 'Dodaj kamerę',
+            icon: Icons.add_rounded,
+            onPressed: () => _open(const CameraEditScreen()),
+          ),
+        ),
       ],
     );
   }
@@ -248,28 +243,22 @@ class _CameraListScreenState extends State<CameraListScreen> {
 
   Widget _sectionHeader(BuildContext context, _Group g) {
     final scheme = Theme.of(context).colorScheme;
-    final isDevice = g.isDevice;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: scheme.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(isDevice ? Icons.dns_rounded : Icons.videocam_rounded, size: 20, color: scheme.primary),
+          Text(
+            g.title.toUpperCase(),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 1.4, color: scheme.primary),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(g.title, style: Theme.of(context).textTheme.titleMedium),
-                Text(g.subtitle, style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
-              ],
+            child: Text(
+              g.subtitle,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
             ),
           ),
         ],
@@ -277,36 +266,34 @@ class _CameraListScreenState extends State<CameraListScreen> {
     );
   }
 
-  Widget _grid(_Group g) {
-    return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      sliver: SliverLayoutBuilder(
-        builder: (context, constraints) {
-          const gap = 14.0;
-          final width = constraints.crossAxisExtent;
-          final columns = (width / 420).ceil().clamp(1, 4);
-          final cardWidth = (width - gap * (columns - 1)) / columns;
-          return SliverGrid.builder(
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: columns,
-              crossAxisSpacing: gap,
-              mainAxisSpacing: gap,
-              mainAxisExtent: cardWidth * 9 / 16 + 70,
-            ),
-            itemCount: g.cameras.length,
-            itemBuilder: (_, i) {
-              final c = g.cameras[i];
-              return CameraCard(
-                camera: c,
-                name: g.displayName(c),
-                onOpen: () => _open(LiveScreen(camera: c)),
-                onRecordings: () => _open(PlaybackScreen(camera: c)),
-                onMore: () => _showOptions(c),
-              );
-            },
-          );
-        },
-      ),
+  Widget _feed(_Group g) {
+    return SliverLayoutBuilder(
+      builder: (context, constraints) {
+        const gap = 3.0;
+        final width = constraints.crossAxisExtent;
+        final columns = (width / 600).ceil().clamp(1, 3);
+        final tileWidth = (width - gap * (columns - 1)) / columns;
+        return SliverGrid.builder(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            crossAxisSpacing: gap,
+            mainAxisSpacing: gap,
+            mainAxisExtent: tileWidth * 9 / 16,
+          ),
+          itemCount: g.cameras.length,
+          itemBuilder: (_, i) {
+            final c = g.cameras[i];
+            return CameraTile(
+              key: ValueKey(c.id),
+              camera: c,
+              name: g.displayName(c),
+              onOpen: () => _open(LiveScreen(camera: c)),
+              onRecordings: () => _open(PlaybackScreen(camera: c)),
+              onMore: () => _showOptions(c),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -354,9 +341,10 @@ class _CameraListScreenState extends State<CameraListScreen> {
   }
 }
 
-/// Karta kamery: miniatura obrazu, stan, nazwa i szybkie akcje.
-class CameraCard extends StatelessWidget {
-  const CameraCard({
+/// Kafel kamery na całą szerokość, bez ramek: obraz odświeżany co kilka sekund,
+/// nazwa i stan na obrazie. Stuknięcie otwiera pełny ekran.
+class CameraTile extends StatefulWidget {
+  const CameraTile({
     super.key,
     required this.camera,
     required this.name,
@@ -372,71 +360,75 @@ class CameraCard extends StatelessWidget {
   final VoidCallback onMore;
 
   @override
+  State<CameraTile> createState() => _CameraTileState();
+}
+
+class _CameraTileState extends State<CameraTile> {
+  static const _refresh = Duration(seconds: 2);
+
+  late CameraApi _api = CameraApi(widget.camera);
+  bool _alive = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Lista buduje tylko kafle widoczne na ekranie (i tuż obok),
+    // więc odświeżamy wyłącznie to, co użytkownik ogląda. Start po pierwszej
+    // klatce - dopiero wtedy wolno pytać o trasę (ModalRoute).
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loop());
+  }
+
+  @override
+  void didUpdateWidget(CameraTile old) {
+    super.didUpdateWidget(old);
+    if (old.camera.toJson().toString() != widget.camera.toJson().toString()) {
+      _api.close();
+      _api = CameraApi(widget.camera);
+    }
+  }
+
+  @override
+  void dispose() {
+    _alive = false;
+    _api.close();
+    super.dispose();
+  }
+
+  Future<void> _loop() async {
+    while (_alive && mounted) {
+      final started = DateTime.now();
+      if (!mounted) return;
+      // Nie pobieramy w tle, gdy na wierzchu jest inny ekran (np. podgląd na żywo).
+      if (ModalRoute.of(context)?.isCurrent ?? true) {
+        try {
+          final frame = await _api.snapshot();
+          if (_alive) Thumbnails.put(widget.camera.id, frame);
+        } on CameraException catch (e) {
+          if (_alive) Thumbnails.fail(widget.camera.id, e.message);
+        } catch (e) {
+          // np. zamknięty klient po usunięciu kafla - nie przerywamy pętli
+          if (_alive) Thumbnails.fail(widget.camera.id, 'Błąd: $e');
+        }
+      }
+      final wait = _refresh - DateTime.now().difference(started);
+      await Future<void>.delayed(wait > Duration.zero ? wait : const Duration(milliseconds: 300));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    Thumbnails.request(camera);
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onOpen,
-        onLongPress: onMore,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: ValueListenableBuilder<int>(
-                valueListenable: Thumbnails.changes,
-                builder: (context, _, _) => _thumbnail(context),
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 6, 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Kanał ${camera.channel} · ${camera.mainStream ? 'HD' : 'SD'} · ${camera.host}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton.filledTonal(
-                      tooltip: 'Nagrania',
-                      icon: const Icon(Icons.history_rounded),
-                      onPressed: onRecordings,
-                    ),
-                    IconButton(
-                      tooltip: 'Więcej',
-                      icon: Icon(Icons.more_vert_rounded, color: scheme.onSurfaceVariant),
-                      onPressed: onMore,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+    return GestureDetector(
+      onTap: widget.onOpen,
+      onLongPress: widget.onMore,
+      child: ValueListenableBuilder<int>(
+        valueListenable: Thumbnails.changes,
+        builder: (context, _, _) => _tile(context),
       ),
     );
   }
 
-  Widget _thumbnail(BuildContext context) {
+  Widget _tile(BuildContext context) {
+    final camera = widget.camera;
     final image = Thumbnails.image(camera.id);
     final error = Thumbnails.error(camera.id);
     final loading = image == null && error == null;
@@ -447,79 +439,142 @@ class CameraCard extends StatelessWidget {
           Image.memory(image, fit: BoxFit.cover, gaplessPlayback: true)
         else
           DecoratedBox(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF0E3A52), Color(0xFF0B2236)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
+            decoration: const BoxDecoration(color: Ocean.deep),
             child: Center(
               child: loading
                   ? const SizedBox(width: 26, height: 26, child: CircularProgressIndicator(strokeWidth: 2.4))
-                  : Icon(Icons.videocam_off_rounded, size: 34, color: Ocean.mist.withValues(alpha: 0.7)),
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.videocam_off_rounded, size: 34, color: Ocean.mist.withValues(alpha: 0.7)),
+                        const SizedBox(height: 6),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            error ?? '',
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            style: const TextStyle(color: Ocean.mist, fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
             ),
           ),
-        // przyciemnienie u góry pod etykiety
+        // przyciemnienie u dołu pod nazwę
         const DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0x99000000), Color(0x00000000)],
-              begin: Alignment.topCenter,
-              end: Alignment(0, -0.2),
+              colors: [Color(0x00000000), Color(0xB3000000)],
+              begin: Alignment(0, 0.15),
+              end: Alignment.bottomCenter,
             ),
           ),
         ),
         Positioned(
-          left: 10,
-          top: 10,
-          child: _StatusPill(online: image != null && error == null, loading: loading),
-        ),
-        Positioned(right: 10, top: 10, child: BrandChip(hikvision: camera.isHikvision)),
-        if (image != null)
-          Center(
-            child: Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.35),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1.5),
+          left: 14,
+          right: 8,
+          bottom: 6,
+          child: Row(
+            children: [
+              _StatusDot(online: image != null && error == null, loading: loading),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  widget.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    shadows: [Shadow(blurRadius: 6, color: Colors.black54)],
+                  ),
+                ),
               ),
-              child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 32),
-            ),
+              if (camera.ptz) const _Badge(icon: Icons.threesixty_rounded),
+              _OverlayButton(icon: Icons.history_rounded, tooltip: 'Nagrania', onPressed: widget.onRecordings),
+              _OverlayButton(icon: Icons.more_vert_rounded, tooltip: 'Więcej', onPressed: widget.onMore),
+            ],
           ),
+        ),
       ],
     );
   }
 }
 
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.online, required this.loading});
+class _OverlayButton extends StatelessWidget {
+  const _OverlayButton({required this.icon, required this.tooltip, required this.onPressed});
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+      icon: Icon(
+        icon,
+        color: Colors.white,
+        shadows: const [Shadow(blurRadius: 6, color: Colors.black54)],
+      ),
+      onPressed: onPressed,
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  const _Badge({required this.icon});
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(right: 4),
+    child: Icon(icon, size: 18, color: Ocean.aqua),
+  );
+}
+
+class _GradientIconButton extends StatelessWidget {
+  const _GradientIconButton({required this.icon, required this.tooltip, required this.onPressed});
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: Ink(
+          decoration: const BoxDecoration(gradient: Ocean.gradient),
+          child: InkWell(
+            onTap: onPressed,
+            child: SizedBox(width: 44, height: 44, child: Icon(icon, color: Colors.white)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusDot extends StatelessWidget {
+  const _StatusDot({required this.online, required this.loading});
   final bool online;
   final bool loading;
 
   @override
   Widget build(BuildContext context) {
     final color = loading ? Ocean.mist : (online ? Ocean.live : Ocean.coral);
-    final label = loading ? 'ŁĄCZENIE' : (online ? 'ONLINE' : 'OFFLINE');
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), borderRadius: BorderRadius.circular(20)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.6),
-          ),
-        ],
+      width: 9,
+      height: 9,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.7), blurRadius: 6)],
       ),
     );
   }

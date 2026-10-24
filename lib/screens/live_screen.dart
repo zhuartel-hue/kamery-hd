@@ -34,6 +34,10 @@ class _LiveScreenState extends State<LiveScreen> {
   bool _snapshotMode = false;
   bool _muted = true;
   bool _controlsVisible = true;
+  bool _ptzVisible = false;
+  Timer? _hideTimer;
+  final TransformationController _zoom = TransformationController();
+  static const _hideAfter = Duration(seconds: 4);
   bool _loading = true;
   String? _error;
   Uint8List? _frame;
@@ -71,10 +75,30 @@ class _LiveScreenState extends State<LiveScreen> {
     );
     _player.setVolume(0);
     _startRtsp();
+    _scheduleHide();
+  }
+
+  /// Pasek znika sam po kilku sekundach, żeby nie zasłaniać obrazu.
+  void _scheduleHide() {
+    _hideTimer?.cancel();
+    _hideTimer = Timer(_hideAfter, () {
+      if (mounted) setState(() => _controlsVisible = false);
+    });
+  }
+
+  void _toggleControls() {
+    setState(() => _controlsVisible = !_controlsVisible);
+    if (_controlsVisible) {
+      _scheduleHide();
+    } else {
+      _hideTimer?.cancel();
+    }
   }
 
   @override
   void dispose() {
+    _hideTimer?.cancel();
+    _zoom.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _snapshotGeneration++;
     for (final s in _subs) {
@@ -190,17 +214,22 @@ class _LiveScreenState extends State<LiveScreen> {
       backgroundColor: Colors.black,
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => setState(() => _controlsVisible = !_controlsVisible),
+        onTap: _toggleControls,
+        // Podwójne stuknięcie cofa powiększenie.
+        onDoubleTap: () => _zoom.value = Matrix4.identity(),
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (_snapshotMode)
-              if (_frame != null)
-                Image.memory(_frame!, fit: BoxFit.contain, gaplessPlayback: true)
-              else
-                const SizedBox()
-            else
-              Video(controller: _video, controls: NoVideoControls, fill: Colors.black),
+            InteractiveViewer(
+              transformationController: _zoom,
+              minScale: 1,
+              maxScale: 6,
+              child: _snapshotMode
+                  ? (_frame != null
+                        ? Image.memory(_frame!, fit: BoxFit.contain, gaplessPlayback: true)
+                        : const SizedBox.expand())
+                  : Video(controller: _video, controls: NoVideoControls, fill: Colors.black),
+            ),
             if (_loading) const Center(child: CircularProgressIndicator()),
             if (_error != null)
               Center(
@@ -227,7 +256,15 @@ class _LiveScreenState extends State<LiveScreen> {
                   ),
                 ),
               ),
-            if (_controlsVisible) ...[_topBar(), Positioned(right: 16, bottom: 16, child: SafeArea(child: _ptzPad()))],
+            if (_camera.ptz && _ptzVisible) Positioned(right: 16, bottom: 16, child: SafeArea(child: _ptzPad())),
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              left: 0,
+              right: 0,
+              top: _controlsVisible ? 0 : -140,
+              child: Listener(onPointerDown: (_) => _scheduleHide(), child: _topBar()),
+            ),
           ],
         ),
       ),
@@ -236,82 +273,86 @@ class _LiveScreenState extends State<LiveScreen> {
 
   Widget _topBar() {
     const white = TextStyle(color: Colors.white);
-    return Positioned(
-      left: 0,
-      right: 0,
-      top: 0,
-      child: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Ocean.abyss.withValues(alpha: 0.75), Ocean.abyss.withValues(alpha: 0.35)],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Ocean.abyss.withValues(alpha: 0.75), Ocean.abyss.withValues(alpha: 0.35)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
             ),
-            child: SafeArea(
-              bottom: false,
-              child: Row(
-                children: [
-                  const BackButton(color: Colors.white),
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: _error != null ? Ocean.coral : (_loading ? Ocean.mist : Ocean.live),
-                            shape: BoxShape.circle,
-                          ),
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: Row(
+              children: [
+                const BackButton(color: Colors.white),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: _error != null ? Ocean.coral : (_loading ? Ocean.mist : Ocean.live),
+                          shape: BoxShape.circle,
                         ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            '${_camera.name}${_snapshotMode ? ' · zdjęcia' : ''}',
-                            style: white.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          '${_camera.name}${_snapshotMode ? ' · zdjęcia' : ''}',
+                          style: white.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  if (!_snapshotMode) ...[
-                    TextButton(
-                      onPressed: () {
-                        setState(() => _mainStream = !_mainStream);
-                        _startRtsp();
-                      },
-                      child: Text(_mainStream ? 'HD' : 'SD', style: white),
-                    ),
-                    IconButton(
-                      tooltip: _muted ? 'Włącz dźwięk' : 'Wycisz',
-                      icon: Icon(_muted ? Icons.volume_off : Icons.volume_up, color: Colors.white),
-                      onPressed: () {
-                        setState(() => _muted = !_muted);
-                        _player.setVolume(_muted ? 0 : 100);
-                      },
-                    ),
-                  ],
-                  IconButton(
-                    tooltip: _snapshotMode ? 'Wideo' : 'Tryb zdjęć',
-                    icon: Icon(_snapshotMode ? Icons.videocam : Icons.photo_library_outlined, color: Colors.white),
-                    onPressed: () => _setMode(!_snapshotMode),
-                  ),
-                  IconButton(
-                    tooltip: 'Nagrania',
-                    icon: const Icon(Icons.history, color: Colors.white),
-                    onPressed: _openPlayback,
-                  ),
-                  IconButton(
-                    tooltip: 'Zapisz zdjęcie',
-                    icon: const Icon(Icons.camera_alt_outlined, color: Colors.white),
-                    onPressed: _capture,
+                ),
+                if (!_snapshotMode) ...[
+                  TextButton(
+                    onPressed: () {
+                      setState(() => _mainStream = !_mainStream);
+                      _startRtsp();
+                    },
+                    child: Text(_mainStream ? 'HD' : 'SD', style: white),
                   ),
                 ],
-              ),
+                if (_camera.ptz)
+                  IconButton(
+                    tooltip: _ptzVisible ? 'Ukryj sterowanie' : 'Steruj kamerą (PTZ)',
+                    isSelected: _ptzVisible,
+                    icon: const Icon(Icons.control_camera_rounded, color: Colors.white),
+                    selectedIcon: const Icon(Icons.control_camera_rounded, color: Ocean.aqua),
+                    onPressed: () => setState(() => _ptzVisible = !_ptzVisible),
+                  ),
+                IconButton(
+                  tooltip: 'Nagrania',
+                  icon: const Icon(Icons.history, color: Colors.white),
+                  onPressed: _openPlayback,
+                ),
+                IconButton(
+                  tooltip: 'Zapisz zdjęcie',
+                  icon: const Icon(Icons.camera_alt_outlined, color: Colors.white),
+                  onPressed: _capture,
+                ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, color: Colors.white),
+                  onSelected: (v) {
+                    if (v == 'mode') _setMode(!_snapshotMode);
+                    if (v == 'sound') {
+                      setState(() => _muted = !_muted);
+                      _player.setVolume(_muted ? 0 : 100);
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    if (!_snapshotMode) PopupMenuItem(value: 'sound', child: Text(_muted ? 'Włącz dźwięk' : 'Wycisz')),
+                    PopupMenuItem(value: 'mode', child: Text(_snapshotMode ? 'Tryb wideo' : 'Tryb zdjęć (zapasowy)')),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
