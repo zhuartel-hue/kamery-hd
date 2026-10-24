@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import '../models/camera.dart';
 import '../services/camera_api.dart';
+import '../theme.dart';
 import 'playback_screen.dart';
 
 /// Podgląd na żywo. Domyślnie RTSP (płynny obraz), awaryjnie „tryb zdjęć”, czyli
@@ -46,22 +48,27 @@ class _LiveScreenState extends State<LiveScreen> {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     // Odtwarzacz zgłasza też niegroźne ostrzeżenia (np. brak dekodowania sprzętowego,
     // po którym przechodzi na programowe) - błąd pokazujemy tylko, gdy nie ma obrazu.
-    _subs.add(_player.stream.width.listen((w) {
-      if (w != null && w > 0 && mounted) {
+    _subs.add(
+      _player.stream.width.listen((w) {
+        if (w != null && w > 0 && mounted) {
+          setState(() {
+            _loading = false;
+            _error = null;
+          });
+        }
+      }),
+    );
+    _subs.add(
+      _player.stream.error.listen((e) {
+        if (!mounted || _snapshotMode || (_player.state.width ?? 0) > 0) return;
         setState(() {
           _loading = false;
-          _error = null;
+          _error =
+              'Nie udało się odtworzyć RTSP. Sprawdź port RTSP i hasło '
+              'albo przełącz na tryb zdjęć.\n($e)';
         });
-      }
-    }));
-    _subs.add(_player.stream.error.listen((e) {
-      if (!mounted || _snapshotMode || (_player.state.width ?? 0) > 0) return;
-      setState(() {
-        _loading = false;
-        _error = 'Nie udało się odtworzyć RTSP. Sprawdź port RTSP i hasło '
-            'albo przełącz na tryb zdjęć.\n($e)';
-      });
-    }));
+      }),
+    );
     _player.setVolume(0);
     _startRtsp();
   }
@@ -184,32 +191,45 @@ class _LiveScreenState extends State<LiveScreen> {
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => setState(() => _controlsVisible = !_controlsVisible),
-        child: Stack(fit: StackFit.expand, children: [
-          if (_snapshotMode)
-            if (_frame != null) Image.memory(_frame!, fit: BoxFit.contain, gaplessPlayback: true)
-            else const SizedBox()
-          else
-            Video(controller: _video, controls: NoVideoControls, fill: Colors.black),
-          if (_loading) const Center(child: CircularProgressIndicator()),
-          if (_error != null)
-            Center(
-              child: Container(
-                margin: const EdgeInsets.all(24),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(12)),
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
-                  const SizedBox(height: 12),
-                  if (!_snapshotMode)
-                    FilledButton(onPressed: () => _setMode(true), child: const Text('Tryb zdjęć')),
-                ]),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (_snapshotMode)
+              if (_frame != null)
+                Image.memory(_frame!, fit: BoxFit.contain, gaplessPlayback: true)
+              else
+                const SizedBox()
+            else
+              Video(controller: _video, controls: NoVideoControls, fill: Colors.black),
+            if (_loading) const Center(child: CircularProgressIndicator()),
+            if (_error != null)
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Ocean.deep.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Ocean.line),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _error!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      const SizedBox(height: 12),
+                      if (!_snapshotMode)
+                        FilledButton(onPressed: () => _setMode(true), child: const Text('Tryb zdjęć')),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          if (_controlsVisible) ...[
-            _topBar(),
-            Positioned(right: 16, bottom: 16, child: SafeArea(child: _ptzPad())),
+            if (_controlsVisible) ...[_topBar(), Positioned(right: 16, bottom: 16, child: SafeArea(child: _ptzPad()))],
           ],
-        ]),
+        ),
       ),
     );
   }
@@ -220,82 +240,116 @@ class _LiveScreenState extends State<LiveScreen> {
       left: 0,
       right: 0,
       top: 0,
-      child: Container(
-        color: Colors.black54,
-        child: SafeArea(
-          bottom: false,
-          child: Row(children: [
-            const BackButton(color: Colors.white),
-            Expanded(
-              child: Text(
-                '${_camera.name}${_snapshotMode ? ' · zdjęcia' : ''}',
-                style: white.copyWith(fontSize: 16),
-                overflow: TextOverflow.ellipsis,
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Ocean.abyss.withValues(alpha: 0.75), Ocean.abyss.withValues(alpha: 0.35)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
               ),
             ),
-            if (!_snapshotMode) ...[
-              TextButton(
-                onPressed: () {
-                  setState(() => _mainStream = !_mainStream);
-                  _startRtsp();
-                },
-                child: Text(_mainStream ? 'HD' : 'SD', style: white),
+            child: SafeArea(
+              bottom: false,
+              child: Row(
+                children: [
+                  const BackButton(color: Colors.white),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: _error != null ? Ocean.coral : (_loading ? Ocean.mist : Ocean.live),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            '${_camera.name}${_snapshotMode ? ' · zdjęcia' : ''}',
+                            style: white.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (!_snapshotMode) ...[
+                    TextButton(
+                      onPressed: () {
+                        setState(() => _mainStream = !_mainStream);
+                        _startRtsp();
+                      },
+                      child: Text(_mainStream ? 'HD' : 'SD', style: white),
+                    ),
+                    IconButton(
+                      tooltip: _muted ? 'Włącz dźwięk' : 'Wycisz',
+                      icon: Icon(_muted ? Icons.volume_off : Icons.volume_up, color: Colors.white),
+                      onPressed: () {
+                        setState(() => _muted = !_muted);
+                        _player.setVolume(_muted ? 0 : 100);
+                      },
+                    ),
+                  ],
+                  IconButton(
+                    tooltip: _snapshotMode ? 'Wideo' : 'Tryb zdjęć',
+                    icon: Icon(_snapshotMode ? Icons.videocam : Icons.photo_library_outlined, color: Colors.white),
+                    onPressed: () => _setMode(!_snapshotMode),
+                  ),
+                  IconButton(
+                    tooltip: 'Nagrania',
+                    icon: const Icon(Icons.history, color: Colors.white),
+                    onPressed: _openPlayback,
+                  ),
+                  IconButton(
+                    tooltip: 'Zapisz zdjęcie',
+                    icon: const Icon(Icons.camera_alt_outlined, color: Colors.white),
+                    onPressed: _capture,
+                  ),
+                ],
               ),
-              IconButton(
-                tooltip: _muted ? 'Włącz dźwięk' : 'Wycisz',
-                icon: Icon(_muted ? Icons.volume_off : Icons.volume_up, color: Colors.white),
-                onPressed: () {
-                  setState(() => _muted = !_muted);
-                  _player.setVolume(_muted ? 0 : 100);
-                },
-              ),
-            ],
-            IconButton(
-              tooltip: _snapshotMode ? 'Wideo' : 'Tryb zdjęć',
-              icon: Icon(_snapshotMode ? Icons.videocam : Icons.photo_library_outlined, color: Colors.white),
-              onPressed: () => _setMode(!_snapshotMode),
             ),
-            IconButton(
-              tooltip: 'Nagrania',
-              icon: const Icon(Icons.history, color: Colors.white),
-              onPressed: _openPlayback,
-            ),
-            IconButton(
-              tooltip: 'Zapisz zdjęcie',
-              icon: const Icon(Icons.camera_alt_outlined, color: Colors.white),
-              onPressed: _capture,
-            ),
-          ]),
+          ),
         ),
       ),
     );
   }
 
   Widget _ptzPad() {
-    return Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-      Column(children: [
-        _ptzButton(Icons.zoom_in, PtzMove.zoomIn),
-        const SizedBox(height: 8),
-        _ptzButton(Icons.zoom_out, PtzMove.zoomOut),
-      ]),
-      const SizedBox(width: 16),
-      Column(children: [
-        _ptzButton(Icons.keyboard_arrow_up, PtzMove.up),
-        Row(children: [
-          _ptzButton(Icons.keyboard_arrow_left, PtzMove.left),
-          const SizedBox(width: 52),
-          _ptzButton(Icons.keyboard_arrow_right, PtzMove.right),
-        ]),
-        _ptzButton(Icons.keyboard_arrow_down, PtzMove.down),
-      ]),
-    ]);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Column(
+          children: [
+            _ptzButton(Icons.zoom_in, PtzMove.zoomIn),
+            const SizedBox(height: 8),
+            _ptzButton(Icons.zoom_out, PtzMove.zoomOut),
+          ],
+        ),
+        const SizedBox(width: 16),
+        Column(
+          children: [
+            _ptzButton(Icons.keyboard_arrow_up, PtzMove.up),
+            Row(
+              children: [
+                _ptzButton(Icons.keyboard_arrow_left, PtzMove.left),
+                const SizedBox(width: 52),
+                _ptzButton(Icons.keyboard_arrow_right, PtzMove.right),
+              ],
+            ),
+            _ptzButton(Icons.keyboard_arrow_down, PtzMove.down),
+          ],
+        ),
+      ],
+    );
   }
 
-  Widget _ptzButton(IconData icon, PtzMove move) => _PtzButton(
-        icon: icon,
-        onStart: () => _ptz(move, true),
-        onStop: () => _ptz(move, false),
-      );
+  Widget _ptzButton(IconData icon, PtzMove move) =>
+      _PtzButton(icon: icon, onStart: () => _ptz(move, true), onStop: () => _ptz(move, false));
 }
 
 class _PtzButton extends StatefulWidget {
@@ -328,8 +382,10 @@ class _PtzButtonState extends State<_PtzButton> {
         height: 52,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: _pressed ? const Color(0xCCE0662B) : Colors.black54,
-          border: Border.all(color: Colors.white38),
+          gradient: _pressed ? Ocean.gradient : null,
+          color: _pressed ? null : Ocean.abyss.withValues(alpha: 0.45),
+          border: Border.all(color: _pressed ? Ocean.aqua : Colors.white.withValues(alpha: 0.28)),
+          boxShadow: [if (_pressed) BoxShadow(color: Ocean.aqua.withValues(alpha: 0.5), blurRadius: 16)],
         ),
         child: Icon(widget.icon, color: Colors.white, size: 30),
       ),

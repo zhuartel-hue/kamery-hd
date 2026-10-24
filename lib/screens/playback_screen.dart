@@ -8,6 +8,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../models/camera.dart';
 import '../models/recording.dart';
 import '../services/camera_api.dart';
+import '../theme.dart';
 
 /// Odtwarzanie nagrań z rejestratora NVR/DVR (lub karty SD kamery).
 /// RTSP nie pozwala przewijać w obrębie strumienia, więc każde przewinięcie
@@ -455,9 +456,9 @@ class _RecordingTimelineState extends State<RecordingTimeline> {
               recordings: widget.recordings,
               marker: _drag ?? widget.current,
               track: widget.dark ? Colors.white24 : scheme.surfaceContainerHighest,
-              segment: widget.dark ? const Color(0xFF64B5F6) : scheme.primary,
+              segment: widget.dark ? Ocean.aqua : scheme.primary,
               text: widget.dark ? Colors.white70 : scheme.onSurfaceVariant,
-              markerColor: const Color(0xFFE0662B),
+              markerColor: Ocean.coral,
               dragging: _drag != null,
             ),
           ),

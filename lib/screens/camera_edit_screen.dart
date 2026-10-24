@@ -4,6 +4,7 @@ import '../models/camera.dart';
 import '../models/discovered_channel.dart';
 import '../services/camera_api.dart';
 import '../services/camera_store.dart';
+import '../theme.dart';
 
 class CameraEditScreen extends StatefulWidget {
   const CameraEditScreen({super.key, this.camera});
@@ -141,11 +142,12 @@ class _CameraEditScreenState extends State<CameraEditScreen> {
     final preview = Camera.fromJson(_read().toJson());
     if (preview.host.isEmpty) preview.host = '<adres>';
     final scheme = Theme.of(context).colorScheme;
+    final busy = _testing || _discovering;
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.camera == null ? 'Nowa kamera' : widget.camera!.name)),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
         children: [
           SegmentedButton<Brand>(
             segments: const [
@@ -155,71 +157,59 @@ class _CameraEditScreenState extends State<CameraEditScreen> {
             selected: {_c.brand},
             onSelectionChanged: (s) => setState(() => _c.brand = s.first),
           ),
-          const SizedBox(height: 16),
-          _field(_name, 'Nazwa', hint: 'np. Wjazd'),
-          _field(_host, 'Adres IP lub domena (DDNS)',
-              hint: '192.168.1.64', keyboard: TextInputType.url, error: _hostError),
-          Row(children: [
-            Expanded(child: _field(_rtspPort, 'Port RTSP', keyboard: TextInputType.number)),
-            const SizedBox(width: 12),
-            Expanded(child: _field(_httpPort, 'Port HTTP', keyboard: TextInputType.number)),
+          _section(context, 'Urządzenie', [
+            _field(_name, 'Nazwa', icon: Icons.label_outline, hint: 'np. Dom, Wjazd'),
+            _field(_host, 'Adres IP lub domena (DDNS)',
+                icon: Icons.router_outlined, hint: '192.168.1.64', keyboard: TextInputType.url, error: _hostError),
+            Row(children: [
+              Expanded(child: _field(_rtspPort, 'Port RTSP', keyboard: TextInputType.number)),
+              const SizedBox(width: 12),
+              Expanded(child: _field(_httpPort, 'Port HTTP', keyboard: TextInputType.number)),
+            ]),
           ]),
-          _field(_user, 'Użytkownik'),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: TextField(
-              controller: _pass,
-              obscureText: !_showPass,
-              autocorrect: false,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                labelText: 'Hasło',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: Icon(_showPass ? Icons.visibility_off : Icons.visibility),
-                  onPressed: () => setState(() => _showPass = !_showPass),
-                ),
+          _section(context, 'Logowanie', [
+            _field(_user, 'Użytkownik', icon: Icons.person_outline),
+            _field(
+              _pass,
+              'Hasło',
+              icon: Icons.lock_outline,
+              obscure: !_showPass,
+              suffix: IconButton(
+                icon: Icon(_showPass ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                onPressed: () => setState(() => _showPass = !_showPass),
               ),
             ),
-          ),
-          _field(_channel, 'Kanał (1 dla kamery, 1…N dla rejestratora NVR/DVR)',
-              keyboard: TextInputType.number),
-          const Text('Strumień'),
-          const SizedBox(height: 6),
-          SegmentedButton<bool>(
-            segments: const [
-              ButtonSegment(value: false, label: Text('SD – szybki')),
-              ButtonSegment(value: true, label: Text('HD – główny')),
-            ],
-            selected: {_c.mainStream},
-            onSelectionChanged: (s) => setState(() => _c.mainStream = s.first),
-          ),
-          const SizedBox(height: 16),
-          SelectableText(
-            preview.rtspUrl(main: preview.mainStream, maskPassword: true),
-            style: TextStyle(fontFamily: 'monospace', fontSize: 12, color: scheme.onSurfaceVariant),
-          ),
-          if (_testResult != null) ...[
+          ]),
+          _section(context, 'Obraz', [
+            _field(_channel, 'Kanał',
+                icon: Icons.numbers, keyboard: TextInputType.number, helper: '1 dla kamery, 1…N dla rejestratora'),
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: false, label: Text('SD · szybki')),
+                ButtonSegment(value: true, label: Text('HD · pełny')),
+              ],
+              selected: {_c.mainStream},
+              onSelectionChanged: (s) => setState(() => _c.mainStream = s.first),
+            ),
             const SizedBox(height: 12),
-            Text(_testResult!,
-                style: TextStyle(
-                  color: _testing ? scheme.onSurfaceVariant : (_testOk ? Colors.green.shade700 : scheme.error),
-                )),
-          ],
+            SelectableText(
+              preview.rtspUrl(main: preview.mainStream, maskPassword: true),
+              style: TextStyle(fontFamily: 'monospace', fontSize: 11, color: scheme.onSurfaceVariant),
+            ),
+          ]),
+          if (_testResult != null) _result(context),
           const SizedBox(height: 20),
-          FilledButton.tonalIcon(
-            onPressed: _discovering || _testing ? null : _discover,
-            icon: _discovering
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.video_library_outlined),
-            label: const Text('Wykryj kamery w rejestratorze'),
+          GradientButton(
+            onPressed: busy ? null : _discover,
+            icon: Icons.travel_explore_rounded,
+            label: _discovering ? 'Szukanie kamer…' : 'Wykryj kamery w rejestratorze',
           ),
           const SizedBox(height: 12),
           Row(children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: _testing ? null : _test,
-                icon: const Icon(Icons.network_check),
+                onPressed: busy ? null : _test,
+                icon: const Icon(Icons.network_check_rounded),
                 label: const Text('Testuj'),
               ),
             ),
@@ -227,7 +217,7 @@ class _CameraEditScreenState extends State<CameraEditScreen> {
             Expanded(
               child: FilledButton.icon(
                 onPressed: _save,
-                icon: const Icon(Icons.save),
+                icon: const Icon(Icons.check_rounded),
                 label: const Text('Zapisz'),
               ),
             ),
@@ -237,20 +227,70 @@ class _CameraEditScreenState extends State<CameraEditScreen> {
     );
   }
 
+  Widget _section(BuildContext context, String title, List<Widget> children) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 20),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 10),
+          child: Text(title.toUpperCase(),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+                color: Theme.of(context).colorScheme.primary,
+              )),
+        ),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 2),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [...children, const SizedBox(height: 12)]),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _result(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = _testing || _discovering ? scheme.onSurfaceVariant : (_testOk ? Ocean.live : scheme.error);
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+        ),
+        child: Text(_testResult!, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+      ),
+    );
+  }
+
   Widget _field(TextEditingController c, String label,
-      {String? hint, TextInputType? keyboard, String? error}) {
+      {IconData? icon,
+      String? hint,
+      String? helper,
+      TextInputType? keyboard,
+      String? error,
+      bool obscure = false,
+      Widget? suffix}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextField(
         controller: c,
         keyboardType: keyboard,
+        obscureText: obscure,
         autocorrect: false,
         onChanged: (_) => setState(() {}),
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
+          helperText: helper,
           errorText: error,
-          border: const OutlineInputBorder(),
+          prefixIcon: icon == null ? null : Icon(icon, size: 20),
+          suffixIcon: suffix,
         ),
       ),
     );

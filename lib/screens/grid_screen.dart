@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../models/camera.dart';
 import '../services/camera_api.dart';
+import '../services/thumbnails.dart';
 import 'live_screen.dart';
 
 /// Wszystkie kamery naraz - odświeżane klatki JPEG, lekkie dla telefonu i sieci.
@@ -47,6 +48,7 @@ class _GridScreenState extends State<GridScreen> {
       try {
         final frame = await _apis[c.id]!.snapshot();
         if (!mounted) return;
+        Thumbnails.put(c.id, frame);
         setState(() {
           _frames[c.id] = frame;
           _errors.remove(c.id);
@@ -74,15 +76,14 @@ class _GridScreenState extends State<GridScreen> {
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width > 700;
     return Scaffold(
-      backgroundColor: const Color(0xFF111111),
       appBar: AppBar(title: const Text('Wszystkie kamery')),
       body: GridView.builder(
-        padding: const EdgeInsets.all(2),
+        padding: const EdgeInsets.all(12),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: wide ? 3 : 2,
           childAspectRatio: 16 / 9,
-          mainAxisSpacing: 2,
-          crossAxisSpacing: 2,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
         ),
         itemCount: widget.cameras.length,
         itemBuilder: (_, i) {
@@ -91,27 +92,35 @@ class _GridScreenState extends State<GridScreen> {
           final error = _errors[c.id];
           return GestureDetector(
             onTap: () => _openLive(c),
-            child: Stack(fit: StackFit.expand, children: [
-              const ColoredBox(color: Colors.black),
-              if (frame != null) Image.memory(frame, fit: BoxFit.contain, gaplessPlayback: true),
-              if (frame == null && error == null)
-                const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))),
-              Positioned(
-                left: 0,
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  color: Colors.black54,
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  child: Text(
-                    error == null ? c.name : '${c.name} – $error',
-                    style: TextStyle(color: error == null ? Colors.white : Colors.orange.shade200, fontSize: 12),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  const ColoredBox(color: Colors.black),
+                  if (frame != null) Image.memory(frame, fit: BoxFit.contain, gaplessPlayback: true),
+                  if (frame == null && error == null)
+                    const Center(
+                      child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+                    ),
+                  Positioned(
+                    left: 0,
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      color: Colors.black54,
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      child: Text(
+                        error == null ? c.name : '${c.name} – $error',
+                        style: TextStyle(color: error == null ? Colors.white : Colors.orange.shade200, fontSize: 12),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ]),
+            ),
           );
         },
       ),
