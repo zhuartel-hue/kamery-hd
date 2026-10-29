@@ -342,7 +342,14 @@ class _PlaybackScreenState extends State<PlaybackScreen> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (_start != null) Video(controller: _video, controls: NoVideoControls, fill: Colors.black),
+          if (_start != null)
+            Video(
+              controller: _video,
+              controls: NoVideoControls,
+              fill: Colors.black,
+              // W poziomie - na całą szerokość telefonu.
+              fit: MediaQuery.orientationOf(context) == Orientation.landscape ? BoxFit.cover : BoxFit.contain,
+            ),
           if (_start == null)
             Center(
               child: Padding(

@@ -103,6 +103,10 @@ class _LiveViewState extends State<_LiveView> {
   /// po powrocie do pionu wracamy do ustawienia kamery.
   Orientation? _orientation;
 
+  /// W poziomie obraz wypełnia całą szerokość telefonu (bez czarnych pasów po bokach,
+  /// lekko przycięty u góry i u dołu); w pionie widać cały kadr.
+  BoxFit get _fit => _orientation == Orientation.landscape ? BoxFit.cover : BoxFit.contain;
+
   void _syncQualityWithOrientation(Orientation o) {
     if (_orientation == o) return;
     _orientation = o;
@@ -318,10 +322,8 @@ class _LiveViewState extends State<_LiveView> {
               minScale: 1,
               maxScale: 6,
               child: _snapshotMode
-                  ? (_frame != null
-                        ? Image.memory(_frame!, fit: BoxFit.contain, gaplessPlayback: true)
-                        : const SizedBox.expand())
-                  : Video(controller: _video, controls: NoVideoControls, fill: Colors.black),
+                  ? (_frame != null ? Image.memory(_frame!, fit: _fit, gaplessPlayback: true) : const SizedBox.expand())
+                  : Video(controller: _video, controls: NoVideoControls, fill: Colors.black, fit: _fit),
             ),
             if (_loading) const Center(child: CircularProgressIndicator()),
             if (_error != null)

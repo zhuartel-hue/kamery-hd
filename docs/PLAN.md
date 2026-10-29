@@ -19,6 +19,8 @@
 
 - Telefon w poziomie: przeglądane kamery w jakości HD (strumień główny); pełny ekran
   jednej kamery przełącza się na HD po obróceniu, w pionie wraca do ustawienia kamery.
+- Telefon w poziomie: obraz na całej szerokości telefonu, bez czarnych pasów po bokach
+  (podgląd na żywo i nagrania).
 - Kolor wiodący: wybór z 20 propozycji (turkus → mięta → zieleń); ikona 1 („A” z obiektywem).
 
 ## Do zbadania
