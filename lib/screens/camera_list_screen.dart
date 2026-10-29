@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
 import '../models/camera.dart';
 import '../services/camera_api.dart';
@@ -184,15 +188,15 @@ class _CameraListScreenState extends State<CameraListScreen> {
                       _feed(g),
                     ],
                   SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 28, 20, 40),
-                    child: Text(
-                      'AriView · wersja $appVersion',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 28, 20, 40),
+                      child: Text(
+                        'AriView · wersja $appVersion',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      ),
                     ),
                   ),
-                ),
                 ],
               ),
             ),
@@ -376,11 +380,21 @@ class _CameraTileState extends State<CameraTile> {
   late CameraApi _api = CameraApi(widget.camera);
   bool _alive = true;
 
+  /// Wideo na żywo w kafelku (strumień SD, bez dźwięku). Dopóki nie ruszy -
+  /// albo gdy się nie uda - kafel pokazuje zdjęcie odświeżane co 2 s.
+  Player? _player;
+  VideoController? _video;
+  bool _liveReady = false;
+  bool _liveFailed = false;
+  DateTime? _liveStarted;
+  static const _liveTimeout = Duration(seconds: 12);
+  final List<StreamSubscription<dynamic>> _subs = [];
+
   @override
   void initState() {
     super.initState();
-    // Lista buduje tylko kafle widoczne na ekranie (i tuż obok),
-    // więc odświeżamy wyłącznie to, co użytkownik ogląda. Start po pierwszej
+    // Lista buduje tylko kafle widoczne na ekranie (i tuż obok), więc wideo
+    // i zdjęcia dotyczą wyłącznie tego, co użytkownik ogląda. Start po pierwszej
     // klatce - dopiero wtedy wolno pytać o trasę (ModalRoute).
     WidgetsBinding.instance.addPostFrameCallback((_) => _loop());
   }
@@ -391,6 +405,8 @@ class _CameraTileState extends State<CameraTile> {
     if (old.camera.toJson().toString() != widget.camera.toJson().toString()) {
       _api.close();
       _api = CameraApi(widget.camera);
+      _stopLive();
+      _liveFailed = false;
     }
   }
 
@@ -398,26 +414,74 @@ class _CameraTileState extends State<CameraTile> {
   void dispose() {
     _alive = false;
     _api.close();
+    _stopLive();
     super.dispose();
+  }
+
+  Future<void> _startLive() async {
+    final player = Player();
+    _player = player;
+    _video = VideoController(player);
+    _subs.add(
+      player.stream.width.listen((w) {
+        if (w != null && w > 0 && mounted && !_liveReady) setState(() => _liveReady = true);
+      }),
+    );
+    // Błędów odtwarzacza nie traktujemy jako awarii: przed pierwszą klatką zgłasza też
+    // niegroźne ostrzeżenia (np. brak dekodowania sprzętowego). O porażce decyduje
+    // brak obrazu po [_liveTimeout] - sprawdzane w pętli.
+    _liveStarted = DateTime.now();
+    await player.setVolume(0);
+    final native = player.platform;
+    if (native is NativePlayer) {
+      await native.setProperty('rtsp-transport', 'tcp');
+      await native.setProperty('cache', 'no');
+    }
+    await player.open(Media(widget.camera.rtspUrl(main: false)));
+  }
+
+  void _stopLive() {
+    for (final s in _subs) {
+      s.cancel();
+    }
+    _subs.clear();
+    _player?.dispose();
+    _player = null;
+    _video = null;
+    _liveReady = false;
   }
 
   Future<void> _loop() async {
     while (_alive && mounted) {
       final started = DateTime.now();
       if (!mounted) return;
-      // Nie pobieramy w tle, gdy na wierzchu jest inny ekran (np. podgląd na żywo).
-      if (ModalRoute.of(context)?.isCurrent ?? true) {
-        try {
-          final frame = await _api.snapshot();
-          if (_alive) Thumbnails.put(widget.camera.id, frame);
-        } on CameraException catch (e) {
-          if (_alive) Thumbnails.fail(widget.camera.id, e.message);
-        } catch (e) {
-          // np. zamknięty klient po usunięciu kafla - nie przerywamy pętli
-          if (_alive) Thumbnails.fail(widget.camera.id, 'Błąd: $e');
+      final visible = ModalRoute.of(context)?.isCurrent ?? true;
+      if (!visible) {
+        // Na wierzchu inny ekran (np. pełny ekran kamery) - zwalniamy strumień,
+        // żeby nie obciążać rejestratora i telefonu.
+        if (_player != null) setState(_stopLive);
+      } else {
+        if (_player == null && !_liveFailed) _startLive();
+        final since = _liveStarted;
+        if (_player != null && !_liveReady && since != null && DateTime.now().difference(since) > _liveTimeout) {
+          // Wideo nie ruszyło - zostajemy przy zdjęciach odświeżanych co 2 s.
+          _liveFailed = true;
+          setState(_stopLive);
+        }
+        if (!_liveReady) {
+          try {
+            final frame = await _api.snapshot();
+            if (_alive) Thumbnails.put(widget.camera.id, frame);
+          } on CameraException catch (e) {
+            if (_alive) Thumbnails.fail(widget.camera.id, e.message);
+          } catch (e) {
+            // np. zamknięty klient po usunięciu kafla - nie przerywamy pętli
+            if (_alive) Thumbnails.fail(widget.camera.id, 'Błąd: $e');
+          }
         }
       }
-      final wait = _refresh - DateTime.now().difference(started);
+      final pause = visible && !_liveReady ? _refresh : const Duration(seconds: 1);
+      final wait = pause - DateTime.now().difference(started);
       await Future<void>.delayed(wait > Duration.zero ? wait : const Duration(milliseconds: 300));
     }
   }
@@ -442,9 +506,12 @@ class _CameraTileState extends State<CameraTile> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (image != null)
+        // Wideo na żywo leży pod spodem; zdjęcie przykrywa je, dopóki nie pojawi się
+        // pierwsza klatka (bez przezroczystości - ta psuje kolory wideo).
+        if (_video != null) Video(controller: _video!, controls: NoVideoControls, fit: BoxFit.cover),
+        if (image != null && !_liveReady)
           Image.memory(image, fit: BoxFit.cover, gaplessPlayback: true)
-        else
+        else if (!_liveReady)
           DecoratedBox(
             decoration: const BoxDecoration(color: Ocean.deep),
             child: Center(
@@ -484,7 +551,7 @@ class _CameraTileState extends State<CameraTile> {
           bottom: 6,
           child: Row(
             children: [
-              _StatusDot(online: image != null && error == null, loading: loading),
+              _StatusDot(online: _liveReady || (image != null && error == null), loading: loading && !_liveReady),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(

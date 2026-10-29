@@ -78,12 +78,12 @@ class _GridScreenState extends State<GridScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Wszystkie kamery')),
       body: GridView.builder(
-        padding: const EdgeInsets.all(12),
+        padding: EdgeInsets.zero,
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: wide ? 3 : 2,
           childAspectRatio: 16 / 9,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
+          mainAxisSpacing: 2,
+          crossAxisSpacing: 2,
         ),
         itemCount: widget.cameras.length,
         itemBuilder: (_, i) {
@@ -93,12 +93,12 @@ class _GridScreenState extends State<GridScreen> {
           return GestureDetector(
             onTap: () => _openLive(c),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.zero,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
                   const ColoredBox(color: Colors.black),
-                  if (frame != null) Image.memory(frame, fit: BoxFit.contain, gaplessPlayback: true),
+                  if (frame != null) Image.memory(frame, fit: BoxFit.cover, gaplessPlayback: true),
                   if (frame == null && error == null)
                     const Center(
                       child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),

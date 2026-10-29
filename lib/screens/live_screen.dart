@@ -217,6 +217,11 @@ class _LiveScreenState extends State<LiveScreen> {
         onTap: _toggleControls,
         // Podwójne stuknięcie cofa powiększenie.
         onDoubleTap: () => _zoom.value = Matrix4.identity(),
+        // Przesunięcie palcem w dół zamyka podgląd (gdy obraz nie jest powiększony).
+        onVerticalDragEnd: (d) {
+          final zoomed = _zoom.value.getMaxScaleOnAxis() > 1.01;
+          if (!zoomed && (d.primaryVelocity ?? 0) > 700) Navigator.of(context).maybePop();
+        },
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -256,7 +261,30 @@ class _LiveScreenState extends State<LiveScreen> {
                   ),
                 ),
               ),
-            if (_camera.ptz && _ptzVisible) Positioned(right: 16, bottom: 16, child: SafeArea(child: _ptzPad())),
+            if (_camera.ptz && _ptzVisible) Positioned(right: 16, bottom: 96, child: SafeArea(child: _ptzPad())),
+            // Powrót w zasięgu kciuka - zawsze widoczny, także gdy górny pasek się schowa.
+            Positioned(
+              right: 20,
+              bottom: 20,
+              child: SafeArea(
+                child: Tooltip(
+                  message: 'Wróć',
+                  child: Material(
+                    color: Ocean.abyss.withValues(alpha: 0.55),
+                    shape: CircleBorder(side: BorderSide(color: Colors.white.withValues(alpha: 0.3))),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: () => Navigator.of(context).maybePop(),
+                      child: const SizedBox(
+                        width: 60,
+                        height: 60,
+                        child: Icon(Icons.arrow_back_rounded, color: Colors.white, size: 30),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
             AnimatedPositioned(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOut,
