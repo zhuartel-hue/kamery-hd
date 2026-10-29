@@ -14,15 +14,82 @@ import 'playback_screen.dart';
 
 /// Podgląd na żywo. Domyślnie RTSP (płynny obraz), awaryjnie „tryb zdjęć”, czyli
 /// kolejne klatki JPEG pobierane przez HTTP.
+/// Pełny ekran kamery. Przesunięcie palcem w lewo / w prawo przełącza na
+/// następną / poprzednią kamerę z listy [cameras].
 class LiveScreen extends StatefulWidget {
-  const LiveScreen({super.key, required this.camera});
-  final Camera camera;
+  const LiveScreen({super.key, required this.cameras, required this.index});
+  final List<Camera> cameras;
+  final int index;
 
   @override
   State<LiveScreen> createState() => _LiveScreenState();
 }
 
 class _LiveScreenState extends State<LiveScreen> {
+  late int _index = widget.index;
+  int _direction = 1;
+
+  // Pasek stanu chowamy na cały czas pełnego ekranu (także przy przełączaniu kamer),
+  // a przywracamy dopiero po wyjściu.
+  @override
+  void initState() {
+    super.initState();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    super.dispose();
+  }
+
+  void _go(int delta) {
+    final n = widget.cameras.length;
+    if (n < 2) return;
+    setState(() {
+      _direction = delta;
+      _index = (_index + delta) % n;
+      if (_index < 0) _index += n;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final camera = widget.cameras[_index];
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      transitionBuilder: (child, anim) => SlideTransition(
+        position: Tween<Offset>(
+          begin: Offset(child.key == ValueKey(camera.id) ? _direction.toDouble() : -_direction.toDouble(), 0),
+          end: Offset.zero,
+        ).animate(anim),
+        child: child,
+      ),
+      child: _LiveView(
+        key: ValueKey(camera.id),
+        camera: camera,
+        position: widget.cameras.length > 1 ? '${_index + 1}/${widget.cameras.length}' : null,
+        onNext: () => _go(1),
+        onPrevious: () => _go(-1),
+      ),
+    );
+  }
+}
+
+class _LiveView extends StatefulWidget {
+  const _LiveView({super.key, required this.camera, required this.onNext, required this.onPrevious, this.position});
+  final Camera camera;
+  final VoidCallback onNext;
+  final VoidCallback onPrevious;
+
+  /// „2/6” - która to kamera z listy.
+  final String? position;
+
+  @override
+  State<_LiveView> createState() => _LiveViewState();
+}
+
+class _LiveViewState extends State<_LiveView> {
   static const _snapshotInterval = Duration(milliseconds: 500);
 
   late final CameraApi _api = CameraApi(widget.camera);
@@ -99,7 +166,6 @@ class _LiveScreenState extends State<LiveScreen> {
   void dispose() {
     _hideTimer?.cancel();
     _zoom.dispose();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _snapshotGeneration++;
     for (final s in _subs) {
       s.cancel();
@@ -222,6 +288,13 @@ class _LiveScreenState extends State<LiveScreen> {
           final zoomed = _zoom.value.getMaxScaleOnAxis() > 1.01;
           if (!zoomed && (d.primaryVelocity ?? 0) > 700) Navigator.of(context).maybePop();
         },
+        // Przesunięcie w bok - następna / poprzednia kamera (gdy obraz nie jest powiększony).
+        onHorizontalDragEnd: (d) {
+          final zoomed = _zoom.value.getMaxScaleOnAxis() > 1.01;
+          final v = d.primaryVelocity ?? 0;
+          if (zoomed || v.abs() < 400) return;
+          v < 0 ? widget.onNext() : widget.onPrevious();
+        },
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -327,7 +400,8 @@ class _LiveScreenState extends State<LiveScreen> {
                       const SizedBox(width: 8),
                       Flexible(
                         child: Text(
-                          '${_camera.name}${_snapshotMode ? ' · zdjęcia' : ''}',
+                          '${_camera.name}${widget.position == null ? '' : '  ${widget.position}'}'
+                          '${_snapshotMode ? ' · zdjęcia' : ''}',
                           style: white.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
                           overflow: TextOverflow.ellipsis,
                         ),

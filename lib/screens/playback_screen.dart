@@ -253,14 +253,31 @@ class _PlaybackScreenState extends State<PlaybackScreen> {
   Widget _buildPortrait(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('Nagrania · ${widget.camera.name}')),
+      // Oś czasu i przyciski na dole - w zasięgu kciuka; lista nagrań nad nimi.
       body: Column(
         children: [
           AspectRatio(aspectRatio: 16 / 9, child: _videoArea()),
-          _dayBar(context),
-          Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _timeline(context, dark: false)),
-          _controls(context, dark: false),
-          const Divider(height: 1),
           Expanded(child: _recordingList(context)),
+          const Divider(height: 1),
+          SafeArea(
+            top: false,
+            child: Column(
+              children: [
+                _dayBar(context),
+                Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _timeline(context, dark: false)),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 0, 16, 8),
+                  child: Row(
+                    children: [
+                      Expanded(child: _controls(context, dark: false)),
+                      // Ten sam okrągły przycisk co w podglądzie - powrót do kamery na żywo.
+                      _BackRoundButton(onTap: () => Navigator.of(context).maybePop()),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -663,4 +680,30 @@ class _TimelinePainter extends CustomPainter {
       old.day != day ||
       old.dragging != dragging ||
       old.segment != segment;
+}
+
+class _BackRoundButton extends StatelessWidget {
+  const _BackRoundButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: 'Wróć do podglądu',
+      child: Material(
+        color: scheme.surfaceContainerHigh,
+        shape: CircleBorder(side: BorderSide(color: scheme.outline)),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: 56,
+            height: 56,
+            child: Icon(Icons.arrow_back_rounded, color: scheme.onSurface, size: 28),
+          ),
+        ),
+      ),
+    );
+  }
 }
