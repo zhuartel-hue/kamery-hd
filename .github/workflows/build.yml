@@ -66,7 +66,9 @@ jobs:
   ios:
     name: iPhone (IPA)
     needs: test
-    runs-on: macos-latest
+    # Maki Intel mają osobną kolejkę - Maki z procesorem Apple (macos-latest)
+    # bywają przeciążone i GitHub anulował zadanie po 15 min czekania.
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
