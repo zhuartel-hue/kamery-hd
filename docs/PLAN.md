@@ -1,6 +1,11 @@
 # Plan rozwoju AriView
 
-## Do zrobienia (zapisane, jeszcze nie budowane)
+## Zrobione
+
+- Przestawianie kamer przeciąganiem (wersja 1.0.13).
+- Telefon w poziomie = same kamery na całym ekranie (wersja 1.0.13).
+
+## Wcześniejsze założenia
 
 1. **Przestawianie kamer przeciąganiem** – klient przytrzymuje kamerę i przeciąga ją
    w inne miejsce (inną „budkę” układu), zamieniając kolejność. Kolejność zapamiętywana

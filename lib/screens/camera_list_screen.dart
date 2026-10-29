@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -10,6 +11,7 @@ import '../services/camera_api.dart';
 import '../services/camera_store.dart';
 import '../services/thumbnails.dart';
 import '../theme.dart';
+import '../widgets/drag_swap.dart';
 import '../widgets/wordmark.dart';
 import 'camera_edit_screen.dart';
 import 'live_screen.dart';
@@ -18,7 +20,10 @@ import 'playback_screen.dart';
 /// Kamery pogrupowane według urządzenia (rejestratora): kamery z tego samego
 /// adresu trafiają do jednej sekcji, pojedyncze kamery - do sekcji „Kamery”.
 class _Group {
-  _Group(this.title, this.subtitle, this.cameras, {this.prefix, this.isDevice = true});
+  _Group(this.key, this.title, this.subtitle, this.cameras, {this.prefix, this.isDevice = true});
+
+  /// Identyfikator grupy (urządzenia) - przeciągać można tylko w obrębie grupy.
+  final String key;
   final String title;
   final bool isDevice;
   final String subtitle;
@@ -36,7 +41,8 @@ class _Group {
     }
     final groups = <_Group>[];
     final singles = <Camera>[];
-    for (final list in byDevice.values) {
+    for (final entry in byDevice.entries) {
+      final list = entry.value;
       if (list.length < 2) {
         singles.addAll(list);
         continue;
@@ -46,6 +52,7 @@ class _Group {
       final prefix = prefixes.length == 1 ? prefixes.first : null;
       groups.add(
         _Group(
+          entry.key,
           prefix ?? 'Rejestrator ${first.brandLabel}',
           '${first.brandLabel} · ${first.host} · ${list.length} ${_CameraListScreenState._plural(list.length)}',
           list,
@@ -56,6 +63,7 @@ class _Group {
     if (singles.isNotEmpty) {
       groups.add(
         _Group(
+          'singles',
           'Kamery',
           '${singles.length} ${_CameraListScreenState._plural(singles.length)}',
           singles,
@@ -97,7 +105,11 @@ class _CameraListScreenState extends State<CameraListScreen> {
   }
 
   void _setLayout(CameraLayout l) {
-    setState(() => _layout = l);
+    setState(() {
+      _layout = l;
+      _wallPage = 0;
+    });
+    if (_wallController.hasClients) _wallController.jumpToPage(0);
     l.save();
   }
 
@@ -113,6 +125,8 @@ class _CameraListScreenState extends State<CameraListScreen> {
 
   Future<void> _open(Widget screen) async {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    // Inne ekrany ustawiają pasek stanu po swojemu - po powrocie ustawiamy go od nowa.
+    _immersive = null;
     _reload();
   }
 
@@ -178,9 +192,25 @@ class _CameraListScreenState extends State<CameraListScreen> {
     );
   }
 
+  bool? _immersive;
+
+  /// W poziomie chowamy pasek stanu telefonu, w pionie przywracamy.
+  void _syncSystemBars(bool landscape) {
+    if (_immersive == landscape) return;
+    _immersive = landscape;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      SystemChrome.setEnabledSystemUIMode(landscape ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final cameras = _cameras;
+    final landscape = MediaQuery.orientationOf(context) == Orientation.landscape;
+    _syncSystemBars(landscape && (cameras?.isNotEmpty ?? false));
+    if (landscape && cameras != null && cameras.isNotEmpty) {
+      return Scaffold(backgroundColor: Colors.black, body: _wall(cameras));
+    }
     return Scaffold(
       body: cameras == null
           ? const Center(child: CircularProgressIndicator())
@@ -345,16 +375,47 @@ class _CameraListScreenState extends State<CameraListScreen> {
   static const _gap = 2.0;
 
   Widget _tileFor(_Group g, Camera c, {required bool live, bool compact = false}) {
-    return CameraTile(
-      key: ValueKey('${c.id}-${_layout.name}-$live'),
-      camera: c,
-      name: g.displayName(c),
-      live: live,
-      compact: compact,
-      onOpen: () => _open(LiveScreen(camera: c)),
-      onRecordings: () => _open(PlaybackScreen(camera: c)),
-      onMore: () => _showOptions(c),
+    return DragSwap(
+      key: ValueKey('drag-${c.id}'),
+      id: c.id,
+      group: g.key,
+      // Podgląd czyta miniaturę w chwili przeciągania, a nie przy budowaniu kafla.
+      preview: Builder(
+        builder: (_) {
+          final image = Thumbnails.image(c.id);
+          return image != null
+              ? Image.memory(image, fit: BoxFit.cover, gaplessPlayback: true)
+              : const ColoredBox(
+                  color: Ocean.deep,
+                  child: Icon(Icons.videocam_rounded, color: Ocean.mist),
+                );
+        },
+      ),
+      onSwap: _swap,
+      onHold: () => _showOptions(c),
+      child: CameraTile(
+        key: ValueKey('${c.id}-${_layout.name}-$live'),
+        camera: c,
+        name: g.displayName(c),
+        live: live,
+        compact: compact,
+        onOpen: () => _open(LiveScreen(camera: c)),
+        onRecordings: () => _open(PlaybackScreen(camera: c)),
+        onMore: () => _showOptions(c),
+      ),
     );
+  }
+
+  /// Zamienia dwie kamery miejscami i zapamiętuje nową kolejność.
+  Future<void> _swap(String from, String to) async {
+    final list = [...?_cameras];
+    final i = list.indexWhere((c) => c.id == from), j = list.indexWhere((c) => c.id == to);
+    if (i < 0 || j < 0) return;
+    final tmp = list[i];
+    list[i] = list[j];
+    list[j] = tmp;
+    setState(() => _cameras = list);
+    await _store.saveAll(list);
   }
 
   Widget _feed(_Group g) {
@@ -468,6 +529,161 @@ class _CameraListScreenState extends State<CameraListScreen> {
             _cell(g, c[3], cw, cw * 9 / 16, big: false),
           ],
         ),
+      ],
+    );
+  }
+
+  // ---- Telefon w poziomie: wybrany układ na cały ekran, strony przesuwane palcem ----
+
+  static int _perPage(CameraLayout l) => switch (l) {
+    CameraLayout.list => 1,
+    CameraLayout.grid4 => 4,
+    CameraLayout.grid9 => 9,
+    CameraLayout.grid16 => 16,
+    CameraLayout.big5 => 6,
+    CameraLayout.big3 => 4,
+  };
+
+  int _wallPage = 0;
+  final PageController _wallController = PageController();
+
+  @override
+  void dispose() {
+    _wallController.dispose();
+    super.dispose();
+  }
+
+  Widget _wall(List<Camera> cameras) {
+    final groups = _Group.of(cameras);
+    final ordered = [for (final g in groups) ...g.cameras];
+    final groupOf = {
+      for (final g in groups)
+        for (final c in g.cameras) c.id: g,
+    };
+    final per = _perPage(_layout);
+    final pages = <List<Camera?>>[];
+    for (var i = 0; i < ordered.length; i += per) {
+      pages.add([for (var j = i; j < i + per; j++) j < ordered.length ? ordered[j] : null]);
+    }
+    Widget cell(Camera? c, {required bool big}) =>
+        c == null ? const ColoredBox(color: Colors.black) : _tileFor(groupOf[c.id]!, c, live: big, compact: true);
+
+    Widget page(List<Camera?> p) {
+      const gap = _gap;
+      switch (_layout) {
+        case CameraLayout.list:
+          return cell(p[0], big: true);
+        case CameraLayout.grid4:
+        case CameraLayout.grid9:
+        case CameraLayout.grid16:
+          final n = _layout == CameraLayout.grid4 ? 2 : (_layout == CameraLayout.grid9 ? 3 : 4);
+          return Column(
+            children: [
+              for (var r = 0; r < n; r++) ...[
+                if (r > 0) const SizedBox(height: gap),
+                Expanded(
+                  child: Row(
+                    children: [
+                      for (var k = 0; k < n; k++) ...[
+                        if (k > 0) const SizedBox(width: gap),
+                        Expanded(child: cell(p[r * n + k], big: n == 2)),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          );
+        case CameraLayout.big5:
+          return Column(
+            children: [
+              Expanded(
+                flex: 2,
+                child: Row(
+                  children: [
+                    Expanded(flex: 2, child: cell(p[0], big: true)),
+                    const SizedBox(width: gap),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Expanded(child: cell(p[1], big: false)),
+                          const SizedBox(height: gap),
+                          Expanded(child: cell(p[2], big: false)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: gap),
+              Expanded(
+                child: Row(
+                  children: [
+                    Expanded(child: cell(p[3], big: false)),
+                    const SizedBox(width: gap),
+                    Expanded(child: cell(p[4], big: false)),
+                    const SizedBox(width: gap),
+                    Expanded(child: cell(p[5], big: false)),
+                  ],
+                ),
+              ),
+            ],
+          );
+        case CameraLayout.big3:
+          // W poziomie: duża po lewej, trzy małe w kolumnie po prawej.
+          return Row(
+            children: [
+              Expanded(flex: 3, child: cell(p[0], big: true)),
+              const SizedBox(width: gap),
+              Expanded(
+                child: Column(
+                  children: [
+                    Expanded(child: cell(p[1], big: false)),
+                    const SizedBox(height: gap),
+                    Expanded(child: cell(p[2], big: false)),
+                    const SizedBox(height: gap),
+                    Expanded(child: cell(p[3], big: false)),
+                  ],
+                ),
+              ),
+            ],
+          );
+      }
+    }
+
+    final current = _wallPage.clamp(0, pages.length - 1);
+    return Stack(
+      children: [
+        PageView.builder(
+          controller: _wallController,
+          scrollDirection: _layout == CameraLayout.list ? Axis.vertical : Axis.horizontal,
+          itemCount: pages.length,
+          onPageChanged: (i) => setState(() => _wallPage = i),
+          itemBuilder: (_, i) => page(pages[i]),
+        ),
+        if (pages.length > 1)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 8,
+            child: IgnorePointer(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (var i = 0; i < pages.length; i++)
+                    Container(
+                      width: i == current ? 18 : 7,
+                      height: 7,
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      decoration: BoxDecoration(
+                        color: i == current ? Ocean.aqua : Colors.white54,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -662,7 +878,6 @@ class _CameraTileState extends State<CameraTile> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: widget.onOpen,
-      onLongPress: widget.onMore,
       child: ValueListenableBuilder<int>(
         valueListenable: Thumbnails.changes,
         builder: (context, _, _) => _tile(context),
