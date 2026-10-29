@@ -333,7 +333,8 @@ class CameraApi {
       final item = m.group(1)!;
       final start = Recording.parseDeviceTime(_xmlTag(item, 'startTime') ?? '');
       final end = Recording.parseDeviceTime(_xmlTag(item, 'endTime') ?? '');
-      if (start != null && end != null) items.add(Recording(start, end));
+      final uri = _xmlTag(item, 'playbackURI')?.replaceAll('&amp;', '&');
+      if (start != null && end != null) items.add(Recording(start, end, uri));
     }
     final status = _xmlTag(xml, 'responseStatusStrg') ?? '';
     return (items, status.toUpperCase() == 'MORE');

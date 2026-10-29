@@ -35,6 +35,9 @@ class _PlaybackScreenState extends State<PlaybackScreen> {
 
   /// Chwila, od której otwarto bieżący strumień; null = nic nie jest odtwarzane.
   DateTime? _start;
+
+  /// Ostatnio otwierany adres nagrania (bez hasła) - do „Szczegółów technicznych”.
+  String? _lastUrl;
   Duration _position = Duration.zero;
   bool _playing = false;
   bool _loading = false;
@@ -163,11 +166,19 @@ class _PlaybackScreenState extends State<PlaybackScreen> {
       _loading = true;
       _error = null;
     });
+    // Koniec przedziału: koniec znalezionego nagrania, nigdy w przyszłości -
+    // część rejestratorów Hikvision odrzuca żądania sięgające poza „teraz”.
+    final segment = recs.where((r) => r.contains(t)).firstOrNull;
+    final now = DateTime.now();
+    var end = segment?.end ?? _dayEnd;
+    if (end.isAfter(now)) end = now;
+    if (!end.isAfter(t)) end = t.add(const Duration(minutes: 1));
+    _lastUrl = widget.camera.playbackUrl(t, end, deviceUri: segment?.uri, maskPassword: true);
     final native = _player.platform;
     if (native is NativePlayer) {
       await native.setProperty('rtsp-transport', 'tcp');
     }
-    await _player.open(Media(widget.camera.playbackUrl(t, _dayEnd)));
+    await _player.open(Media(widget.camera.playbackUrl(t, end, deviceUri: segment?.uri)));
   }
 
   void _shift(Duration d) {
@@ -186,9 +197,12 @@ class _PlaybackScreenState extends State<PlaybackScreen> {
 
   /// Zapytania do rejestratora i jego odpowiedzi - do zrzutu ekranu przy zgłaszaniu problemu.
   void _showDetails() {
-    final log = _api.searchLog.isEmpty
-        ? 'Brak danych - wyszukiwanie jeszcze się nie odbyło.'
-        : _api.searchLog.join('\n\n');
+    final parts = [
+      ..._api.searchLog,
+      if (_lastUrl != null) 'Odtwarzanie:\n$_lastUrl',
+      if (_error != null) 'Błąd odtwarzania:\n$_error',
+    ];
+    final log = parts.isEmpty ? 'Brak danych - wyszukiwanie jeszcze się nie odbyło.' : parts.join('\n\n');
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -345,10 +359,20 @@ class _PlaybackScreenState extends State<PlaybackScreen> {
             Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text(
-                  _error!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    TextButton.icon(
+                      onPressed: _showDetails,
+                      icon: const Icon(Icons.bug_report_outlined),
+                      label: const Text('Szczegóły techniczne'),
+                    ),
+                  ],
                 ),
               ),
             ),

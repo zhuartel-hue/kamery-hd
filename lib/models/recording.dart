@@ -1,9 +1,12 @@
 /// Fragment nagrania na rejestratorze (czas lokalny urządzenia).
 class Recording {
-  const Recording(this.start, this.end);
+  const Recording(this.start, this.end, [this.uri]);
 
   final DateTime start;
   final DateTime end;
+
+  /// Adres odtwarzania podany przez rejestrator (Hikvision: playbackURI), jeśli jest.
+  final String? uri;
 
   Duration get duration => end.difference(start);
 
@@ -18,7 +21,7 @@ class Recording {
     for (final r in sorted) {
       if (result.isNotEmpty && !r.start.isAfter(result.last.end.add(gap))) {
         final last = result.removeLast();
-        result.add(Recording(last.start, r.end.isAfter(last.end) ? r.end : last.end));
+        result.add(Recording(last.start, r.end.isAfter(last.end) ? r.end : last.end, last.uri ?? r.uri));
       } else {
         result.add(r);
       }

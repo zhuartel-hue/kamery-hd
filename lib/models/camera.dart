@@ -55,10 +55,15 @@ class Camera {
 
   /// Odtwarzanie nagrań z rejestratora (lub karty SD kamery) od [from] do [to].
   /// Oba systemy podają czas lokalny urządzenia; Hikvision dopisuje „Z” mimo to.
-  String playbackUrl(DateTime from, DateTime to) {
-    final base = _rtspBase();
+  /// [deviceUri] to adres nagrania podany przez rejestrator Hikvision w wynikach
+  /// wyszukiwania - z niego bierzemy ścieżkę, bo jest w formacie danego firmware'u.
+  String playbackUrl(DateTime from, DateTime to, {String? deviceUri, bool maskPassword = false}) {
+    final base = _rtspBase(maskPassword: maskPassword);
     if (isHikvision) {
-      return '$base/Streaming/tracks/${channel}01?starttime=${_hikTime(from)}&endtime=${_hikTime(to)}';
+      var path = '/Streaming/tracks/${channel}01';
+      final parsed = deviceUri == null ? null : Uri.tryParse(deviceUri);
+      if (parsed != null && parsed.path.contains('/Streaming/tracks/')) path = parsed.path;
+      return '$base$path?starttime=${_hikTime(from)}&endtime=${_hikTime(to)}';
     }
     return '$base/cam/playback?channel=$channel&subtype=0'
         '&starttime=${_dahuaTime(from)}&endtime=${_dahuaTime(to)}';

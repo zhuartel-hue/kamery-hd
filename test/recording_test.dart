@@ -103,4 +103,19 @@ void main() {
     api.close();
     await server.close(force: true);
   });
+
+  test('Hikvision: adres nagrania z wyników (playbackURI) i odtwarzanie z niego', () {
+    const xml = '<CMSearchResult><responseStatusStrg>OK</responseStatusStrg><matchList><searchMatchItem>'
+        '<timeSpan><startTime>2026-10-29T08:00:00Z</startTime><endTime>2026-10-29T09:00:00Z</endTime></timeSpan>'
+        '<mediaSegmentDescriptor><playbackURI>rtsp://192.168.1.10/Streaming/tracks/201/?starttime=20261029T080000Z'
+        '&amp;endtime=20261029T090000Z&amp;name=00000000201000000&amp;size=1048576</playbackURI>'
+        '</mediaSegmentDescriptor></searchMatchItem></matchList></CMSearchResult>';
+    final (items, _) = CameraApi.parseHikSearch(xml);
+    expect(items.single.uri, contains('&endtime=20261029T090000Z&name='));
+    final c = Camera(host: '192.168.1.10', password: 'x', channel: 2);
+    final url = c.playbackUrl(DateTime(2026, 10, 29, 8, 30), DateTime(2026, 10, 29, 9), deviceUri: items.single.uri);
+    // ścieżka z rejestratora (z ukośnikiem na końcu), nasze godziny, bez name/size
+    expect(url, 'rtsp://admin:x@192.168.1.10:554/Streaming/tracks/201/?starttime=20261029T083000Z&endtime=20261029T090000Z');
+    expect(c.playbackUrl(DateTime(2026, 10, 29, 8), DateTime(2026, 10, 29, 9), maskPassword: true), contains('admin:****@'));
+  });
 }
