@@ -98,6 +98,20 @@ class _LiveViewState extends State<_LiveView> {
   final List<StreamSubscription<dynamic>> _subs = [];
 
   late bool _mainStream = widget.camera.mainStream;
+
+  /// Orientacja przy ostatnim budowaniu - po obróceniu w poziom przełączamy na HD,
+  /// po powrocie do pionu wracamy do ustawienia kamery.
+  Orientation? _orientation;
+
+  void _syncQualityWithOrientation(Orientation o) {
+    if (_orientation == o) return;
+    _orientation = o;
+    final wantMain = o == Orientation.landscape ? true : widget.camera.mainStream;
+    if (wantMain == _mainStream) return;
+    _mainStream = wantMain;
+    if (!_snapshotMode) WidgetsBinding.instance.addPostFrameCallback((_) => _startRtsp());
+  }
+
   bool _snapshotMode = false;
   bool _muted = true;
   bool _controlsVisible = true;
@@ -276,6 +290,7 @@ class _LiveViewState extends State<_LiveView> {
 
   @override
   Widget build(BuildContext context) {
+    _syncQualityWithOrientation(MediaQuery.orientationOf(context));
     return Scaffold(
       backgroundColor: Colors.black,
       body: GestureDetector(

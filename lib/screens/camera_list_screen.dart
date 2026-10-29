@@ -401,7 +401,7 @@ class _CameraListScreenState extends State<CameraListScreen> {
     return layout == CameraLayout.list ? _feed(g) : _blocks(g, layout);
   }
 
-  Widget _tileFor(_Group g, Camera c, {required bool live, bool compact = false}) {
+  Widget _tileFor(_Group g, Camera c, {required bool live, bool compact = false, bool hd = false}) {
     return DragSwap(
       key: ValueKey('drag-${c.id}'),
       id: c.id,
@@ -421,11 +421,12 @@ class _CameraListScreenState extends State<CameraListScreen> {
       onSwap: _swap,
       onHold: () => _showOptions(c),
       child: CameraTile(
-        key: ValueKey('${c.id}-$live-$compact'),
+        key: ValueKey('${c.id}-$live-$compact-$hd'),
         camera: c,
         name: g.displayName(c),
         live: live,
         compact: compact,
+        hd: hd,
         onOpen: () => _openLive(c),
         onRecordings: () => _open(PlaybackScreen(camera: c)),
         onMore: () => _showOptions(c),
@@ -488,7 +489,7 @@ class _CameraListScreenState extends State<CameraListScreen> {
   }
 
   /// Jeden blok układu wypełniający dostępne miejsce (w pionie 16:9, w poziomie cały ekran).
-  Widget _block(_Group g, CameraLayout layout, List<Camera?> cams) {
+  Widget _block(_Group g, CameraLayout layout, List<Camera?> cams, {bool hd = false}) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final cw = (constraints.maxWidth - (layout.cols - 1) * _gap) / layout.cols;
@@ -503,7 +504,7 @@ class _CameraListScreenState extends State<CameraListScreen> {
                 height: layout.cells[i].h * ch + (layout.cells[i].h - 1) * _gap,
                 child: cams[i] == null
                     ? const ColoredBox(color: Colors.black)
-                    : _tileFor(g, cams[i]!, live: layout.liveAt(i), compact: layout != CameraLayout.list),
+                    : _tileFor(g, cams[i]!, live: layout.liveAt(i), compact: layout != CameraLayout.list, hd: hd),
               ),
           ],
         );
@@ -531,7 +532,10 @@ class _CameraListScreenState extends State<CameraListScreen> {
       for (var i = 0; i < g.cameras.length; i += per) {
         final cams = [for (var j = i; j < i + per; j++) j < g.cameras.length ? g.cameras[j] : null];
         pages.add(
-          layout == CameraLayout.list ? _tileFor(g, cams[0]!, live: true, compact: true) : _block(g, layout, cams),
+          // W poziomie wideo w jakości HD (strumień główny).
+          layout == CameraLayout.list
+              ? _tileFor(g, cams[0]!, live: true, compact: true, hd: true)
+              : _block(g, layout, cams, hd: true),
         );
       }
     }
@@ -622,6 +626,7 @@ class CameraTile extends StatefulWidget {
     required this.onMore,
     this.live = true,
     this.compact = false,
+    this.hd = false,
   });
 
   final Camera camera;
@@ -632,6 +637,9 @@ class CameraTile extends StatefulWidget {
 
   /// Mały kafel: mniejszy napis, bez przycisków (dostępne po przytrzymaniu).
   final bool compact;
+
+  /// true = strumień główny (HD) zamiast pomocniczego - telefon w poziomie.
+  final bool hd;
   final VoidCallback onOpen;
   final VoidCallback onRecordings;
   final VoidCallback onMore;
@@ -703,7 +711,7 @@ class _CameraTileState extends State<CameraTile> {
       await native.setProperty('rtsp-transport', 'tcp');
       await native.setProperty('cache', 'no');
     }
-    await player.open(Media(widget.camera.rtspUrl(main: false)));
+    await player.open(Media(widget.camera.rtspUrl(main: widget.hd)));
   }
 
   void _stopLive() {

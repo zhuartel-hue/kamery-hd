@@ -15,6 +15,12 @@
    cały ekran bez przewijania. Lista w poziomie: jedna kamera na cały ekran, przewijanie
    kolejnych.
 
+## Gotowe w kodzie, czeka na budowę (z nowym kolorem)
+
+- Telefon w poziomie: przeglądane kamery w jakości HD (strumień główny); pełny ekran
+  jednej kamery przełącza się na HD po obróceniu, w pionie wraca do ustawienia kamery.
+- Kolor wiodący: wybór z 20 propozycji (turkus → mięta → zieleń); ikona 1 („A” z obiektywem).
+
 ## Do zbadania
 
 - **Logowanie klientów przez chmurę** – konto AriView, synchronizacja listy kamer,
