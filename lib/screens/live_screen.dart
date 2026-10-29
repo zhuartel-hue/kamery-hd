@@ -262,26 +262,22 @@ class _LiveScreenState extends State<LiveScreen> {
                 ),
               ),
             if (_camera.ptz && _ptzVisible) Positioned(right: 16, bottom: 96, child: SafeArea(child: _ptzPad())),
-            // Powrót w zasięgu kciuka - zawsze widoczny, także gdy górny pasek się schowa.
+            // Nagrania i powrót w zasięgu kciuka - zawsze widoczne, także gdy górny pasek się schowa.
             Positioned(
               right: 20,
               bottom: 20,
               child: SafeArea(
-                child: Tooltip(
-                  message: 'Wróć',
-                  child: Material(
-                    color: Ocean.abyss.withValues(alpha: 0.55),
-                    shape: CircleBorder(side: BorderSide(color: Colors.white.withValues(alpha: 0.3))),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _RoundButton(icon: Icons.history_rounded, tooltip: 'Nagrania', onTap: _openPlayback),
+                    const SizedBox(width: 14),
+                    _RoundButton(
+                      icon: Icons.arrow_back_rounded,
+                      tooltip: 'Wróć',
                       onTap: () => Navigator.of(context).maybePop(),
-                      child: const SizedBox(
-                        width: 60,
-                        height: 60,
-                        child: Icon(Icons.arrow_back_rounded, color: Colors.white, size: 30),
-                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -457,6 +453,30 @@ class _PtzButtonState extends State<_PtzButton> {
           boxShadow: [if (_pressed) BoxShadow(color: Ocean.aqua.withValues(alpha: 0.5), blurRadius: 16)],
         ),
         child: Icon(widget.icon, color: Colors.white, size: 30),
+      ),
+    );
+  }
+}
+
+/// Okrągły, półprzezroczysty przycisk na obrazie kamery.
+class _RoundButton extends StatelessWidget {
+  const _RoundButton({required this.icon, required this.tooltip, required this.onTap});
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Ocean.abyss.withValues(alpha: 0.55),
+        shape: CircleBorder(side: BorderSide(color: Colors.white.withValues(alpha: 0.3))),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(width: 60, height: 60, child: Icon(icon, color: Colors.white, size: 30)),
+        ),
       ),
     );
   }

@@ -5,13 +5,13 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../models/camera.dart';
+import '../models/camera_layout.dart';
 import '../services/camera_api.dart';
 import '../services/camera_store.dart';
 import '../services/thumbnails.dart';
 import '../theme.dart';
 import '../widgets/wordmark.dart';
 import 'camera_edit_screen.dart';
-import 'grid_screen.dart';
 import 'live_screen.dart';
 import 'playback_screen.dart';
 
@@ -85,11 +85,20 @@ class CameraListScreen extends StatefulWidget {
 class _CameraListScreenState extends State<CameraListScreen> {
   final _store = CameraStore();
   List<Camera>? _cameras;
+  CameraLayout _layout = CameraLayout.list;
 
   @override
   void initState() {
     super.initState();
     _reload();
+    CameraLayout.load().then((l) {
+      if (mounted) setState(() => _layout = l);
+    });
+  }
+
+  void _setLayout(CameraLayout l) {
+    setState(() => _layout = l);
+    l.save();
   }
 
   Future<void> _reload() async {
@@ -182,11 +191,13 @@ class _CameraListScreenState extends State<CameraListScreen> {
                   _header(context, cameras),
                   if (cameras.isEmpty)
                     SliverFillRemaining(hasScrollBody: false, child: _empty(context))
-                  else
+                  else ...[
+                    SliverToBoxAdapter(child: _layoutPicker(context)),
                     for (final g in _Group.of(cameras)) ...[
                       SliverToBoxAdapter(child: _sectionHeader(context, g)),
-                      _feed(g),
+                      _section(g),
                     ],
+                  ],
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 28, 20, 40),
@@ -228,12 +239,6 @@ class _CameraListScreenState extends State<CameraListScreen> {
         ),
       ),
       actions: [
-        if (cameras.isNotEmpty)
-          IconButton.filledTonal(
-            tooltip: 'Siatka',
-            icon: const Icon(Icons.grid_view_rounded),
-            onPressed: () => _open(GridScreen(cameras: cameras)),
-          ),
         Padding(
           padding: const EdgeInsets.only(left: 8, right: 12),
           child: _GradientIconButton(
@@ -277,6 +282,81 @@ class _CameraListScreenState extends State<CameraListScreen> {
     );
   }
 
+  static const _layoutIcons = {
+    CameraLayout.list: Icons.view_agenda_rounded,
+    CameraLayout.grid4: Icons.grid_view_rounded,
+    CameraLayout.grid9: Icons.apps_rounded,
+    CameraLayout.grid16: Icons.grid_on_rounded,
+    CameraLayout.big5: Icons.dashboard_rounded,
+    CameraLayout.big3: Icons.view_quilt_rounded,
+  };
+
+  /// Pasek wyboru układu - zaznaczony ma turkusowe tło.
+  Widget _layoutPicker(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: 52,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+        children: [
+          for (final l in CameraLayout.values)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Tooltip(
+                message: l.label,
+                child: Material(
+                  color: l == _layout ? null : scheme.surfaceContainerHigh,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  clipBehavior: Clip.antiAlias,
+                  child: Ink(
+                    decoration: BoxDecoration(gradient: l == _layout ? Ocean.gradient : null),
+                    child: InkWell(
+                      onTap: () => _setLayout(l),
+                      child: SizedBox(
+                        width: 52,
+                        child: Icon(
+                          _layoutIcons[l],
+                          size: 22,
+                          color: l == _layout ? Colors.white : scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _section(_Group g) {
+    return switch (_layout) {
+      CameraLayout.list => _feed(g),
+      CameraLayout.grid4 => _grid(g, 2, live: true),
+      CameraLayout.grid9 => _grid(g, 3, live: false),
+      CameraLayout.grid16 => _grid(g, 4, live: false),
+      CameraLayout.big5 => _featured(g, 6, _big5),
+      CameraLayout.big3 => _featured(g, 4, _big3),
+    };
+  }
+
+  static const _gap = 2.0;
+
+  Widget _tileFor(_Group g, Camera c, {required bool live, bool compact = false}) {
+    return CameraTile(
+      key: ValueKey('${c.id}-${_layout.name}-$live'),
+      camera: c,
+      name: g.displayName(c),
+      live: live,
+      compact: compact,
+      onOpen: () => _open(LiveScreen(camera: c)),
+      onRecordings: () => _open(PlaybackScreen(camera: c)),
+      onMore: () => _showOptions(c),
+    );
+  }
+
   Widget _feed(_Group g) {
     return SliverLayoutBuilder(
       builder: (context, constraints) {
@@ -292,19 +372,103 @@ class _CameraListScreenState extends State<CameraListScreen> {
             mainAxisExtent: tileWidth * 9 / 16,
           ),
           itemCount: g.cameras.length,
-          itemBuilder: (_, i) {
-            final c = g.cameras[i];
-            return CameraTile(
-              key: ValueKey(c.id),
-              camera: c,
-              name: g.displayName(c),
-              onOpen: () => _open(LiveScreen(camera: c)),
-              onRecordings: () => _open(PlaybackScreen(camera: c)),
-              onMore: () => _showOptions(c),
-            );
-          },
+          itemBuilder: (_, i) => _tileFor(g, g.cameras[i], live: true),
         );
       },
+    );
+  }
+
+  /// Siatka 2×2, 3×3 lub 4×4. Przy 9 i 16 kamerach - zdjęcia zamiast wideo,
+  /// żeby nie obciążać telefonu i rejestratora kilkunastoma strumieniami.
+  Widget _grid(_Group g, int columns, {required bool live}) {
+    return SliverGrid.builder(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columns,
+        crossAxisSpacing: _gap,
+        mainAxisSpacing: _gap,
+        childAspectRatio: 16 / 9,
+      ),
+      itemCount: g.cameras.length,
+      itemBuilder: (_, i) => _tileFor(g, g.cameras[i], live: live, compact: true),
+    );
+  }
+
+  /// Układy z jedną dużą kamerą: kamery idą blokami po [perBlock].
+  Widget _featured(_Group g, int perBlock, Widget Function(_Group, List<Camera?>, double) block) {
+    return SliverLayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.crossAxisExtent;
+        final blocks = <List<Camera?>>[];
+        for (var i = 0; i < g.cameras.length; i += perBlock) {
+          blocks.add([for (var j = i; j < i + perBlock; j++) j < g.cameras.length ? g.cameras[j] : null]);
+        }
+        return SliverList.separated(
+          itemCount: blocks.length,
+          separatorBuilder: (_, _) => const SizedBox(height: _gap),
+          itemBuilder: (_, i) => block(g, blocks[i], width),
+        );
+      },
+    );
+  }
+
+  Widget _cell(_Group g, Camera? c, double w, double h, {required bool big}) {
+    return SizedBox(
+      width: w,
+      height: h,
+      child: c == null ? const ColoredBox(color: Colors.black) : _tileFor(g, c, live: big, compact: !big),
+    );
+  }
+
+  /// 1 duża (2×2 pola) + 5 małych dookoła - klasyczny układ rejestratorów.
+  Widget _big5(_Group g, List<Camera?> c, double width) {
+    final cw = (width - 2 * _gap) / 3, ch = cw * 9 / 16;
+    final bw = 2 * cw + _gap, bh = 2 * ch + _gap;
+    return Column(
+      children: [
+        Row(
+          children: [
+            _cell(g, c[0], bw, bh, big: true),
+            const SizedBox(width: _gap),
+            Column(
+              children: [
+                _cell(g, c[1], cw, ch, big: false),
+                const SizedBox(height: _gap),
+                _cell(g, c[2], cw, ch, big: false),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: _gap),
+        Row(
+          children: [
+            _cell(g, c[3], cw, ch, big: false),
+            const SizedBox(width: _gap),
+            _cell(g, c[4], cw, ch, big: false),
+            const SizedBox(width: _gap),
+            _cell(g, c[5], cw, ch, big: false),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// 1 duża na całą szerokość + 3 małe pod nią.
+  Widget _big3(_Group g, List<Camera?> c, double width) {
+    final cw = (width - 2 * _gap) / 3;
+    return Column(
+      children: [
+        _cell(g, c[0], width, width * 9 / 16, big: true),
+        const SizedBox(height: _gap),
+        Row(
+          children: [
+            _cell(g, c[1], cw, cw * 9 / 16, big: false),
+            const SizedBox(width: _gap),
+            _cell(g, c[2], cw, cw * 9 / 16, big: false),
+            const SizedBox(width: _gap),
+            _cell(g, c[3], cw, cw * 9 / 16, big: false),
+          ],
+        ),
+      ],
     );
   }
 
@@ -362,10 +526,18 @@ class CameraTile extends StatefulWidget {
     required this.onOpen,
     required this.onRecordings,
     required this.onMore,
+    this.live = true,
+    this.compact = false,
   });
 
   final Camera camera;
   final String name;
+
+  /// false = tylko zdjęcia odświeżane co 2 s (małe kafle w siatkach 9 i 16).
+  final bool live;
+
+  /// Mały kafel: mniejszy napis, bez przycisków (dostępne po przytrzymaniu).
+  final bool compact;
   final VoidCallback onOpen;
   final VoidCallback onRecordings;
   final VoidCallback onMore;
@@ -461,7 +633,7 @@ class _CameraTileState extends State<CameraTile> {
         // żeby nie obciążać rejestratora i telefonu.
         if (_player != null) setState(_stopLive);
       } else {
-        if (_player == null && !_liveFailed) _startLive();
+        if (widget.live && _player == null && !_liveFailed) _startLive();
         final since = _liveStarted;
         if (_player != null && !_liveReady && since != null && DateTime.now().difference(since) > _liveTimeout) {
           // Wideo nie ruszyło - zostajemy przy zdjęciach odświeżanych co 2 s.
@@ -521,16 +693,17 @@ class _CameraTileState extends State<CameraTile> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.videocam_off_rounded, size: 34, color: Ocean.mist.withValues(alpha: 0.7)),
-                        const SizedBox(height: 6),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
-                          child: Text(
-                            error ?? '',
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            style: const TextStyle(color: Ocean.mist, fontSize: 12),
+                        if (!widget.compact) const SizedBox(height: 6),
+                        if (!widget.compact)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Text(
+                              error ?? '',
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              style: const TextStyle(color: Ocean.mist, fontSize: 12),
+                            ),
                           ),
-                        ),
                       ],
                     ),
             ),
@@ -546,29 +719,31 @@ class _CameraTileState extends State<CameraTile> {
           ),
         ),
         Positioned(
-          left: 14,
-          right: 8,
-          bottom: 6,
+          left: widget.compact ? 6 : 14,
+          right: widget.compact ? 4 : 8,
+          bottom: widget.compact ? 3 : 6,
           child: Row(
             children: [
               _StatusDot(online: _liveReady || (image != null && error == null), loading: loading && !_liveReady),
-              const SizedBox(width: 8),
+              SizedBox(width: widget.compact ? 5 : 8),
               Expanded(
                 child: Text(
                   widget.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
+                    fontSize: widget.compact ? 11 : 16,
                     fontWeight: FontWeight.w700,
-                    shadows: [Shadow(blurRadius: 6, color: Colors.black54)],
+                    shadows: const [Shadow(blurRadius: 6, color: Colors.black54)],
                   ),
                 ),
               ),
-              if (camera.ptz) const _Badge(icon: Icons.threesixty_rounded),
-              _OverlayButton(icon: Icons.history_rounded, tooltip: 'Nagrania', onPressed: widget.onRecordings),
-              _OverlayButton(icon: Icons.more_vert_rounded, tooltip: 'Więcej', onPressed: widget.onMore),
+              if (!widget.compact) ...[
+                if (camera.ptz) const _Badge(icon: Icons.threesixty_rounded),
+                _OverlayButton(icon: Icons.history_rounded, tooltip: 'Nagrania', onPressed: widget.onRecordings),
+                _OverlayButton(icon: Icons.more_vert_rounded, tooltip: 'Więcej', onPressed: widget.onMore),
+              ],
             ],
           ),
         ),
