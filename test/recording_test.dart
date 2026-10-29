@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kamery_hd/models/camera.dart';
 import 'package:kamery_hd/models/recording.dart';
@@ -61,5 +64,43 @@ void main() {
       Recording(t(5, 30), t(5, 45)), // w środku poprzedniego
     ]);
     expect(merged, [Recording(t(0), t(3)), Recording(t(5), t(6))]);
+  });
+
+  test('czas Dahua ze spacją jako %20 (nie „+”)', () {
+    expect(CameraApi.dahuaTime(DateTime(2026, 10, 29, 7, 5, 9)), '2026-10-29%2007:05:09');
+  });
+
+  test('warianty zapytania Hikvision', () {
+    final from = DateTime(2026, 10, 29), to = DateTime(2026, 10, 29, 23, 59, 59);
+    final a = CameraApi.hikSearchBody('trackList', 201, from, to, 0, 'ID');
+    final b = CameraApi.hikSearchBody('trackIDList', 201, from, to, 50, 'ID');
+    final c = CameraApi.hikSearchBody('xmlns', 201, from, to, 0, 'ID');
+    expect(a, contains('<trackList><trackID>201</trackID></trackList>'));
+    expect(a, contains('<startTime>2026-10-29T00:00:00Z</startTime>'));
+    expect(b, contains('<trackIDList><trackID>201</trackID></trackIDList>'));
+    expect(b, contains('<searchResultPostion>50</searchResultPostion>'));
+    expect(c, contains('xmlns="http://www.isapi.org/ver20/XMLSchema"'));
+  });
+
+  test('Hikvision: gdy pierwszy wariant odrzucony, aplikacja próbuje kolejnego', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    server.listen((req) async {
+      final body = await utf8.decoder.bind(req).join();
+      if (body.contains('<trackIDList>')) {
+        req.response.write('<CMSearchResult><responseStatusStrg>OK</responseStatusStrg><matchList>'
+            '<searchMatchItem><timeSpan><startTime>2026-10-29T08:00:00Z</startTime>'
+            '<endTime>2026-10-29T09:00:00Z</endTime></timeSpan></searchMatchItem></matchList></CMSearchResult>');
+      } else {
+        req.response.statusCode = 400;
+        req.response.write('<ResponseStatus><statusString>Invalid Content</statusString></ResponseStatus>');
+      }
+      await req.response.close();
+    });
+    final api = CameraApi(Camera(host: '127.0.0.1', httpPort: server.port, user: ''));
+    final recs = await api.recordings(DateTime(2026, 10, 29));
+    expect(recs, [Recording(DateTime(2026, 10, 29, 8), DateTime(2026, 10, 29, 9))]);
+    expect(api.searchLog.join('\n'), contains('Invalid Content'));
+    api.close();
+    await server.close(force: true);
   });
 }

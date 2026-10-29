@@ -68,6 +68,9 @@ class _Group {
   }
 }
 
+/// Numer wersji nadawany przy budowaniu na GitHubie (--dart-define=APP_VERSION=…).
+const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: 'testowa');
+
 class CameraListScreen extends StatefulWidget {
   const CameraListScreen({super.key});
 
@@ -180,7 +183,16 @@ class _CameraListScreenState extends State<CameraListScreen> {
                       SliverToBoxAdapter(child: _sectionHeader(context, g)),
                       _feed(g),
                     ],
-                  const SliverToBoxAdapter(child: SizedBox(height: 40)),
+                  SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 28, 20, 40),
+                    child: Text(
+                      'AriView · wersja $appVersion',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                  ),
+                ),
                 ],
               ),
             ),

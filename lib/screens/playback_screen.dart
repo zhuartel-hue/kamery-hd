@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -50,28 +51,36 @@ class _PlaybackScreenState extends State<PlaybackScreen> {
   @override
   void initState() {
     super.initState();
-    _subs.add(_player.stream.position.listen((p) {
-      if (mounted && _start != null) setState(() => _position = p);
-    }));
-    _subs.add(_player.stream.playing.listen((p) {
-      if (mounted) setState(() => _playing = p);
-    }));
-    _subs.add(_player.stream.width.listen((w) {
-      if (w != null && w > 0 && mounted) {
+    _subs.add(
+      _player.stream.position.listen((p) {
+        if (mounted && _start != null) setState(() => _position = p);
+      }),
+    );
+    _subs.add(
+      _player.stream.playing.listen((p) {
+        if (mounted) setState(() => _playing = p);
+      }),
+    );
+    _subs.add(
+      _player.stream.width.listen((w) {
+        if (w != null && w > 0 && mounted) {
+          setState(() {
+            _loading = false;
+            _error = null;
+          });
+        }
+      }),
+    );
+    // Jak w podglądzie na żywo: ostrzeżenia odtwarzacza ignorujemy, gdy jest obraz.
+    _subs.add(
+      _player.stream.error.listen((e) {
+        if (!mounted || _start == null || (_player.state.width ?? 0) > 0) return;
         setState(() {
           _loading = false;
-          _error = null;
+          _error = 'Nie udało się odtworzyć nagrania.\n($e)';
         });
-      }
-    }));
-    // Jak w podglądzie na żywo: ostrzeżenia odtwarzacza ignorujemy, gdy jest obraz.
-    _subs.add(_player.stream.error.listen((e) {
-      if (!mounted || _start == null || (_player.state.width ?? 0) > 0) return;
-      setState(() {
-        _loading = false;
-        _error = 'Nie udało się odtworzyć nagrania.\n($e)';
-      });
-    }));
+      }),
+    );
     _search();
   }
 
@@ -129,10 +138,7 @@ class _PlaybackScreenState extends State<PlaybackScreen> {
 
   Future<void> _pickTime() async {
     final current = _current ?? _recordings?.firstOrNull?.start ?? _day;
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(current),
-    );
+    final picked = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(current));
     if (picked != null) {
       _playFrom(DateTime(_day.year, _day.month, _day.day, picked.hour, picked.minute));
     }
@@ -178,6 +184,36 @@ class _PlaybackScreenState extends State<PlaybackScreen> {
     _player.playOrPause();
   }
 
+  /// Zapytania do rejestratora i jego odpowiedzi - do zrzutu ekranu przy zgłaszaniu problemu.
+  void _showDetails() {
+    final log = _api.searchLog.isEmpty
+        ? 'Brak danych - wyszukiwanie jeszcze się nie odbyło.'
+        : _api.searchLog.join('\n\n');
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Szczegóły techniczne'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: SelectableText(log, style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: log));
+              Navigator.pop(ctx);
+              _toast('Skopiowano - możesz wkleić w wiadomości');
+            },
+            child: const Text('Kopiuj'),
+          ),
+          FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Zamknij')),
+        ],
+      ),
+    );
+  }
+
   void _toast(String text) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -203,61 +239,68 @@ class _PlaybackScreenState extends State<PlaybackScreen> {
   Widget _buildPortrait(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('Nagrania · ${widget.camera.name}')),
-      body: Column(children: [
-        AspectRatio(aspectRatio: 16 / 9, child: _videoArea()),
-        _dayBar(context),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _timeline(context, dark: false),
-        ),
-        _controls(context, dark: false),
-        const Divider(height: 1),
-        Expanded(child: _recordingList(context)),
-      ]),
+      body: Column(
+        children: [
+          AspectRatio(aspectRatio: 16 / 9, child: _videoArea()),
+          _dayBar(context),
+          Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _timeline(context, dark: false)),
+          _controls(context, dark: false),
+          const Divider(height: 1),
+          Expanded(child: _recordingList(context)),
+        ],
+      ),
     );
   }
 
   Widget _buildLandscape(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(fit: StackFit.expand, children: [
-        _videoArea(),
-        Positioned(
-          left: 0,
-          right: 0,
-          top: 0,
-          child: Container(
-            color: Colors.black54,
-            child: SafeArea(
-              bottom: false,
-              child: Row(children: [
-                const BackButton(color: Colors.white),
-                Expanded(
-                  child: Text('Nagrania · ${widget.camera.name}',
-                      style: const TextStyle(color: Colors.white, fontSize: 16), overflow: TextOverflow.ellipsis),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          _videoArea(),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            child: Container(
+              color: Colors.black54,
+              child: SafeArea(
+                bottom: false,
+                child: Row(
+                  children: [
+                    const BackButton(color: Colors.white),
+                    Expanded(
+                      child: Text(
+                        'Nagrania · ${widget.camera.name}',
+                        style: const TextStyle(color: Colors.white, fontSize: 16),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    _dayBar(context, dark: true),
+                  ],
                 ),
-                _dayBar(context, dark: true),
-              ]),
+              ),
             ),
           ),
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: Container(
-            color: Colors.black54,
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: SafeArea(
-              top: false,
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                _timeline(context, dark: true),
-                _controls(context, dark: true),
-              ]),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              color: Colors.black54,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [_timeline(context, dark: true), _controls(context, dark: true)],
+                ),
+              ),
             ),
           ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 
@@ -265,43 +308,52 @@ class _PlaybackScreenState extends State<PlaybackScreen> {
     final current = _current;
     return ColoredBox(
       color: Colors.black,
-      child: Stack(fit: StackFit.expand, children: [
-        if (_start != null) Video(controller: _video, controls: NoVideoControls, fill: Colors.black),
-        if (_start == null)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                _recordings == null
-                    ? 'Szukanie nagrań…'
-                    : _recordings!.isEmpty
-                        ? (_searchError ?? 'Brak nagrań w tym dniu')
-                        : 'Stuknij oś czasu albo ▶, aby odtworzyć nagranie',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (_start != null) Video(controller: _video, controls: NoVideoControls, fill: Colors.black),
+          if (_start == null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  _recordings == null
+                      ? 'Szukanie nagrań…'
+                      : _recordings!.isEmpty
+                      ? (_searchError ?? 'Brak nagrań w tym dniu')
+                      : 'Stuknij oś czasu albo ▶, aby odtworzyć nagranie',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70),
+                ),
               ),
             ),
-          ),
-        if (current != null)
-          Positioned(
-            left: 8,
-            top: 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(6)),
-              child: Text(_hms(current),
-                  style: const TextStyle(color: Colors.white, fontFeatures: [FontFeature.tabularFigures()])),
+          if (current != null)
+            Positioned(
+              left: 8,
+              top: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(6)),
+                child: Text(
+                  _hms(current),
+                  style: const TextStyle(color: Colors.white, fontFeatures: [FontFeature.tabularFigures()]),
+                ),
+              ),
             ),
-          ),
-        if (_loading || (_recordings == null && _start == null)) const Center(child: CircularProgressIndicator()),
-        if (_error != null)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
+          if (_loading || (_recordings == null && _start == null)) const Center(child: CircularProgressIndicator()),
+          if (_error != null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
             ),
-          ),
-      ]),
+        ],
+      ),
     );
   }
 
@@ -309,28 +361,34 @@ class _PlaybackScreenState extends State<PlaybackScreen> {
     final color = dark ? Colors.white : null;
     final isToday = _day == _today();
     final label = MaterialLocalizations.of(context).formatMediumDate(_day);
-    return Row(mainAxisSize: dark ? MainAxisSize.min : MainAxisSize.max, children: [
-      IconButton(
-        tooltip: 'Poprzedni dzień',
-        icon: Icon(Icons.chevron_left, color: color),
-        onPressed: () => _setDay(_day.subtract(const Duration(days: 1))),
-      ),
-      if (dark)
-        TextButton(onPressed: _pickDay, child: Text(label, style: TextStyle(color: color)))
-      else
-        Expanded(
-          child: TextButton.icon(
-            onPressed: _pickDay,
-            icon: const Icon(Icons.calendar_today, size: 18),
-            label: Text(isToday ? 'Dzisiaj, $label' : label),
-          ),
+    return Row(
+      mainAxisSize: dark ? MainAxisSize.min : MainAxisSize.max,
+      children: [
+        IconButton(
+          tooltip: 'Poprzedni dzień',
+          icon: Icon(Icons.chevron_left, color: color),
+          onPressed: () => _setDay(_day.subtract(const Duration(days: 1))),
         ),
-      IconButton(
-        tooltip: 'Następny dzień',
-        icon: Icon(Icons.chevron_right, color: isToday ? color?.withValues(alpha: 0.3) : color),
-        onPressed: isToday ? null : () => _setDay(_day.add(const Duration(days: 1))),
-      ),
-    ]);
+        if (dark)
+          TextButton(
+            onPressed: _pickDay,
+            child: Text(label, style: TextStyle(color: color)),
+          )
+        else
+          Expanded(
+            child: TextButton.icon(
+              onPressed: _pickDay,
+              icon: const Icon(Icons.calendar_today, size: 18),
+              label: Text(isToday ? 'Dzisiaj, $label' : label),
+            ),
+          ),
+        IconButton(
+          tooltip: 'Następny dzień',
+          icon: Icon(Icons.chevron_right, color: isToday ? color?.withValues(alpha: 0.3) : color),
+          onPressed: isToday ? null : () => _setDay(_day.add(const Duration(days: 1))),
+        ),
+      ],
+    );
   }
 
   Widget _timeline(BuildContext context, {required bool dark}) {
@@ -346,43 +404,69 @@ class _PlaybackScreenState extends State<PlaybackScreen> {
   Widget _controls(BuildContext context, {required bool dark}) {
     final color = dark ? Colors.white : Theme.of(context).colorScheme.onSurface;
     final hasRecordings = _recordings?.isNotEmpty ?? false;
-    return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-      IconButton(
-        tooltip: 'Cofnij 30 s',
-        icon: Icon(Icons.replay_30, color: color),
-        onPressed: _start == null ? null : () => _shift(const Duration(seconds: -30)),
-      ),
-      const SizedBox(width: 8),
-      IconButton.filled(
-        iconSize: 36,
-        tooltip: _playing ? 'Pauza' : 'Odtwórz',
-        icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
-        onPressed: hasRecordings ? _togglePlay : null,
-      ),
-      const SizedBox(width: 8),
-      IconButton(
-        tooltip: 'Do przodu 30 s',
-        icon: Icon(Icons.forward_30, color: color),
-        onPressed: _start == null ? null : () => _shift(const Duration(seconds: 30)),
-      ),
-      const SizedBox(width: 16),
-      TextButton.icon(
-        onPressed: hasRecordings ? _pickTime : null,
-        icon: Icon(Icons.schedule, color: hasRecordings ? color : null),
-        label: Text('Godzina', style: TextStyle(color: hasRecordings ? color : null)),
-      ),
-    ]);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(
+          tooltip: 'Cofnij 30 s',
+          icon: Icon(Icons.replay_30, color: color),
+          onPressed: _start == null ? null : () => _shift(const Duration(seconds: -30)),
+        ),
+        const SizedBox(width: 8),
+        IconButton.filled(
+          iconSize: 36,
+          tooltip: _playing ? 'Pauza' : 'Odtwórz',
+          icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
+          onPressed: hasRecordings ? _togglePlay : null,
+        ),
+        const SizedBox(width: 8),
+        IconButton(
+          tooltip: 'Do przodu 30 s',
+          icon: Icon(Icons.forward_30, color: color),
+          onPressed: _start == null ? null : () => _shift(const Duration(seconds: 30)),
+        ),
+        const SizedBox(width: 16),
+        TextButton.icon(
+          onPressed: hasRecordings ? _pickTime : null,
+          icon: Icon(Icons.schedule, color: hasRecordings ? color : null),
+          label: Text('Godzina', style: TextStyle(color: hasRecordings ? color : null)),
+        ),
+      ],
+    );
   }
 
   Widget _recordingList(BuildContext context) {
     final recs = _recordings;
     if (recs == null) return const SizedBox();
     if (recs.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(_searchError ?? 'Brak nagrań w tym dniu', textAlign: TextAlign.center),
-        ),
+      final scheme = Theme.of(context).colorScheme;
+      return ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          Text(
+            _searchError ?? 'Brak nagrań w tym dniu',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Sprawdź:\n'
+            '• czy w aplikacji wpisany jest adres REJESTRATORA (nagrania są na jego dysku), '
+            'a nie samej kamery — teraz: ${widget.camera.host}\n'
+            '• czy konto „${widget.camera.user}” ma w rejestratorze uprawnienie do odtwarzania\n'
+            '• czy rejestrator ma dysk i włączone nagrywanie tej kamery\n'
+            '• inny dzień (strzałka ◀ u góry)',
+            style: TextStyle(color: scheme.onSurfaceVariant, height: 1.5),
+          ),
+          const SizedBox(height: 20),
+          Center(
+            child: OutlinedButton.icon(
+              onPressed: _showDetails,
+              icon: const Icon(Icons.bug_report_outlined),
+              label: const Text('Szczegóły techniczne'),
+            ),
+          ),
+        ],
       );
     }
     final current = _current;
@@ -436,35 +520,37 @@ class _RecordingTimelineState extends State<RecordingTimeline> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return LayoutBuilder(builder: (context, constraints) {
-      final width = constraints.maxWidth;
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapUp: (d) => widget.onSeek(_timeAt(d.localPosition.dx, width)),
-        onHorizontalDragUpdate: (d) => setState(() => _drag = _timeAt(d.localPosition.dx, width)),
-        onHorizontalDragEnd: (_) {
-          final t = _drag;
-          setState(() => _drag = null);
-          if (t != null) widget.onSeek(t);
-        },
-        child: SizedBox(
-          width: double.infinity,
-          height: 64,
-          child: CustomPaint(
-            painter: _TimelinePainter(
-              day: widget.day,
-              recordings: widget.recordings,
-              marker: _drag ?? widget.current,
-              track: widget.dark ? Colors.white24 : scheme.surfaceContainerHighest,
-              segment: widget.dark ? Ocean.aqua : scheme.primary,
-              text: widget.dark ? Colors.white70 : scheme.onSurfaceVariant,
-              markerColor: Ocean.coral,
-              dragging: _drag != null,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapUp: (d) => widget.onSeek(_timeAt(d.localPosition.dx, width)),
+          onHorizontalDragUpdate: (d) => setState(() => _drag = _timeAt(d.localPosition.dx, width)),
+          onHorizontalDragEnd: (_) {
+            final t = _drag;
+            setState(() => _drag = null);
+            if (t != null) widget.onSeek(t);
+          },
+          child: SizedBox(
+            width: double.infinity,
+            height: 64,
+            child: CustomPaint(
+              painter: _TimelinePainter(
+                day: widget.day,
+                recordings: widget.recordings,
+                marker: _drag ?? widget.current,
+                track: widget.dark ? Colors.white24 : scheme.surfaceContainerHighest,
+                segment: widget.dark ? Ocean.aqua : scheme.primary,
+                text: widget.dark ? Colors.white70 : scheme.onSurfaceVariant,
+                markerColor: Ocean.coral,
+                dragging: _drag != null,
+              ),
             ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   }
 }
 
@@ -488,8 +574,7 @@ class _TimelinePainter extends CustomPainter {
 
   static const _barTop = 18.0, _barHeight = 20.0;
 
-  double _x(DateTime t, double width) =>
-      (t.difference(day).inSeconds / 86400).clamp(0.0, 1.0) * width;
+  double _x(DateTime t, double width) => (t.difference(day).inSeconds / 86400).clamp(0.0, 1.0) * width;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -515,7 +600,10 @@ class _TimelinePainter extends CustomPainter {
       canvas.drawLine(Offset(x, _barTop + _barHeight), Offset(x, _barTop + _barHeight + (major ? 7 : 4)), tick);
       if (major) {
         final tp = TextPainter(
-          text: TextSpan(text: '$h', style: TextStyle(color: text, fontSize: 11)),
+          text: TextSpan(
+            text: '$h',
+            style: TextStyle(color: text, fontSize: 11),
+          ),
           textDirection: TextDirection.ltr,
         )..layout();
         final lx = (x - tp.width / 2).clamp(0.0, max(0.0, w - tp.width)).toDouble();
@@ -546,6 +634,9 @@ class _TimelinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_TimelinePainter old) =>
-      old.recordings != recordings || old.marker != marker || old.day != day || old.dragging != dragging ||
+      old.recordings != recordings ||
+      old.marker != marker ||
+      old.day != day ||
+      old.dragging != dragging ||
       old.segment != segment;
 }
