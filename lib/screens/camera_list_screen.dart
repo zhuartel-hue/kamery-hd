@@ -269,6 +269,13 @@ class _CameraListScreenState extends State<CameraListScreen> {
         ),
       ),
       actions: [
+        IconButton.filledTonal(
+          tooltip: Theme.of(context).brightness == Brightness.dark ? 'Jasny motyw' : 'Ciemny motyw',
+          icon: Icon(
+            Theme.of(context).brightness == Brightness.dark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+          ),
+          onPressed: ThemeController.toggle,
+        ),
         Padding(
           padding: const EdgeInsets.only(left: 8, right: 12),
           child: _GradientIconButton(

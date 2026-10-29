@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Paleta „ocean”: głęboki granat, turkus i błękit, koralowy akcent.
 class Ocean {
@@ -20,21 +21,14 @@ class Ocean {
   static const ink = Color(0xFF0A2540);
 
   /// Główny gradient: przyciski, ikona, akcenty.
-  static const gradient = LinearGradient(
-    colors: [lagoon, azure],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  static const gradient = LinearGradient(colors: [lagoon, azure], begin: Alignment.topLeft, end: Alignment.bottomRight);
 }
 
 const _font = 'PlusJakartaSans';
 
 ThemeData buildTheme(Brightness brightness) {
   final dark = brightness == Brightness.dark;
-  final scheme = ColorScheme.fromSeed(
-    seedColor: Ocean.lagoon,
-    brightness: brightness,
-  ).copyWith(
+  final scheme = ColorScheme.fromSeed(seedColor: Ocean.lagoon, brightness: brightness).copyWith(
     primary: dark ? Ocean.aqua : const Color(0xFF0E7490),
     onPrimary: dark ? Ocean.abyss : Colors.white,
     primaryContainer: dark ? const Color(0xFF0E3A52) : const Color(0xFFD5F3FA),
@@ -73,12 +67,7 @@ ThemeData buildTheme(Brightness brightness) {
       foregroundColor: scheme.onSurface,
       elevation: 0,
       scrolledUnderElevation: 0,
-      titleTextStyle: TextStyle(
-        fontFamily: _font,
-        fontSize: 20,
-        fontWeight: FontWeight.w700,
-        color: scheme.onSurface,
-      ),
+      titleTextStyle: TextStyle(fontFamily: _font, fontSize: 20, fontWeight: FontWeight.w700, color: scheme.onSurface),
     ),
     cardTheme: CardThemeData(
       color: scheme.surfaceContainerLow,
@@ -153,11 +142,7 @@ ThemeData buildTheme(Brightness brightness) {
       contentTextStyle: const TextStyle(fontFamily: _font, color: Ocean.foam),
       shape: rounded,
     ),
-    listTileTheme: ListTileThemeData(
-      shape: rounded,
-      iconColor: scheme.onSurfaceVariant,
-      selectedColor: scheme.primary,
-    ),
+    listTileTheme: ListTileThemeData(shape: rounded, iconColor: scheme.onSurfaceVariant, selectedColor: scheme.primary),
     dividerTheme: DividerThemeData(color: scheme.outlineVariant.withValues(alpha: 0.6), space: 1),
     checkboxTheme: CheckboxThemeData(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
     progressIndicatorTheme: ProgressIndicatorThemeData(color: scheme.primary),
@@ -194,18 +179,28 @@ class GradientButton extends StatelessWidget {
             onTap: onPressed,
             child: SizedBox(
               height: height,
-              child: Row(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
-                if (icon != null) ...[Icon(icon, color: Colors.white, size: 20), const SizedBox(width: 8)],
-                Flexible(
-                  child: Padding(
-                    padding: EdgeInsets.only(right: icon != null ? 4 : 0),
-                    child: Text(label,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[Icon(icon, color: Colors.white, size: 20), const SizedBox(width: 8)],
+                  Flexible(
+                    child: Padding(
+                      padding: EdgeInsets.only(right: icon != null ? 4 : 0),
+                      child: Text(
+                        label,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15, fontFamily: _font)),
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          fontFamily: _font,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ]),
+                ],
+              ),
             ),
           ),
         ),
@@ -234,5 +229,26 @@ class BrandChip extends StatelessWidget {
         style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.8),
       ),
     );
+  }
+}
+
+/// Wybrany motyw (jasny / ciemny), zapamiętywany na telefonie.
+class ThemeController {
+  ThemeController._();
+
+  static const _key = 'themeMode';
+
+  /// Obraz z kamer najlepiej wygląda na ciemnym tle - ciemny motyw jest domyślny.
+  static final ValueNotifier<ThemeMode> mode = ValueNotifier(ThemeMode.dark);
+
+  static Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    mode.value = prefs.getString(_key) == 'light' ? ThemeMode.light : ThemeMode.dark;
+  }
+
+  static Future<void> toggle() async {
+    mode.value = mode.value == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_key, mode.value == ThemeMode.light ? 'light' : 'dark');
   }
 }

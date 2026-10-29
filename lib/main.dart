@@ -8,6 +8,7 @@ import 'theme.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+  ThemeController.load();
   runApp(const KameryApp());
 }
 
@@ -16,17 +17,19 @@ class KameryApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'AriView',
-      debugShowCheckedModeBanner: false,
-      locale: const Locale('pl'),
-      supportedLocales: const [Locale('pl')],
-      localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      theme: buildTheme(Brightness.light),
-      darkTheme: buildTheme(Brightness.dark),
-      // Obraz z kamer najlepiej wygląda na ciemnym tle - ciemny motyw jest domyślny.
-      themeMode: ThemeMode.dark,
-      home: const CameraListScreen(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeController.mode,
+      builder: (context, mode, _) => MaterialApp(
+        title: 'AriView',
+        debugShowCheckedModeBanner: false,
+        locale: const Locale('pl'),
+        supportedLocales: const [Locale('pl')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        theme: buildTheme(Brightness.light),
+        darkTheme: buildTheme(Brightness.dark),
+        themeMode: mode,
+        home: const CameraListScreen(),
+      ),
     );
   }
 }
