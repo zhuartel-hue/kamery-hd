@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Paleta „ocean”: głęboki granat, turkus i błękit, koralowy akcent.
+/// Paleta „ocean”: głęboki granat, jasny turkus morski (mięta), koralowy akcent.
 class Ocean {
   static const abyss = Color(0xFF061423); // tło (ciemny motyw)
   static const deep = Color(0xFF0B2236); // karty
   static const deepHigh = Color(0xFF123150); // pola, wyróżnienia
   static const line = Color(0xFF1C3D5C);
 
-  static const aqua = Color(0xFF22D3EE);
-  static const lagoon = Color(0xFF06B6D4);
-  static const azure = Color(0xFF3B82F6);
+  static const aqua = Color(0xFF5EEAD4);
+  static const lagoon = Color(0xFF14B8A6);
+  static const azure = Color(0xFF0D9488);
   static const coral = Color(0xFFFF7A59);
   static const live = Color(0xFF34D399);
 
@@ -29,13 +29,13 @@ const _font = 'PlusJakartaSans';
 ThemeData buildTheme(Brightness brightness) {
   final dark = brightness == Brightness.dark;
   final scheme = ColorScheme.fromSeed(seedColor: Ocean.lagoon, brightness: brightness).copyWith(
-    primary: dark ? Ocean.aqua : const Color(0xFF0E7490),
+    primary: dark ? Ocean.aqua : const Color(0xFF0F766E),
     onPrimary: dark ? Ocean.abyss : Colors.white,
-    primaryContainer: dark ? const Color(0xFF0E3A52) : const Color(0xFFD5F3FA),
+    primaryContainer: dark ? const Color(0xFF0E3B3D) : const Color(0xFFCCFBF1),
     onPrimaryContainer: dark ? Ocean.foam : Ocean.ink,
     secondary: Ocean.azure,
-    secondaryContainer: dark ? const Color(0xFF0E3A52) : const Color(0xFFD5F3FA),
-    onSecondaryContainer: dark ? Ocean.aqua : const Color(0xFF0E7490),
+    secondaryContainer: dark ? const Color(0xFF0E3B3D) : const Color(0xFFCCFBF1),
+    onSecondaryContainer: dark ? Ocean.aqua : const Color(0xFF0F766E),
     tertiary: Ocean.coral,
     error: const Color(0xFFFF6B6B),
     surface: dark ? Ocean.abyss : Ocean.mist50,

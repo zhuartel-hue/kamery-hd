@@ -15,13 +15,13 @@
    cały ekran bez przewijania. Lista w poziomie: jedna kamera na cały ekran, przewijanie
    kolejnych.
 
-## Gotowe w kodzie, czeka na budowę (z nowym kolorem)
+## W budowie (nowy kolor, HD w poziomie)
 
 - Telefon w poziomie: przeglądane kamery w jakości HD (strumień główny); pełny ekran
   jednej kamery przełącza się na HD po obróceniu, w pionie wraca do ustawienia kamery.
 - Telefon w poziomie: obraz na całej szerokości telefonu, bez czarnych pasów po bokach
   (podgląd na żywo i nagrania).
-- Kolor wiodący: wybór z 20 propozycji (turkus → mięta → zieleń); ikona 1 („A” z obiektywem).
+- Kolor wiodący: nr 12 „Jasny turkus morski” #5EEAD4 (gradient do #14B8A6); ikona „A” z obiektywem w tym kolorze.
 
 ## Do zbadania
 

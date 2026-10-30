@@ -5,17 +5,17 @@ import re
 
 from PIL import Image, ImageDraw, ImageFilter
 
-LAGOON, AZURE, ABYSS, AQUA, WHITE = (6, 182, 212), (59, 130, 246), (6, 20, 35), (34, 211, 238), (255, 255, 255)
+LIGHT, TEAL, ABYSS, WHITE = (94, 234, 212), (20, 184, 166), (6, 20, 35), (255, 255, 255)
 
 
 def gradient(size):
-    """Ukośny gradient turkus -> błękit."""
+    """Ukośny gradient jasny turkus morski -> morska zieleń."""
     g = Image.new("RGB", (size, size))
     px = g.load()
     for y in range(size):
         for x in range(size):
-            t = (x + y) / (2 * size - 2)
-            px[x, y] = tuple(round(a + (b - a) * t) for a, b in zip(LAGOON, AZURE))
+            t = (x * 0.4 + y) / (1.4 * size)
+            px[x, y] = tuple(round(a + (b - a) * t) for a, b in zip(LIGHT, TEAL))
     return g
 
 
@@ -33,7 +33,7 @@ def draw(size, rounded):
 
     # miękka poświata pod kamerą
     glow = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    ImageDraw.Draw(glow).ellipse([40*s, 60*s, 160*s, 150*s], fill=(255, 255, 255, 50))
+    ImageDraw.Draw(glow).ellipse([40*s, 60*s, 160*s, 150*s], fill=(255, 255, 255, 70))
     img = Image.alpha_composite(img, glow.filter(ImageFilter.GaussianBlur(14*s)))
 
     d = ImageDraw.Draw(img)
@@ -48,7 +48,7 @@ def draw(size, rounded):
     cx, cy = 96*s, 116*s
     d.ellipse([cx-31*s, cy-31*s, cx+31*s, cy+31*s], fill=WHITE)
     d.ellipse([cx-22*s, cy-22*s, cx+22*s, cy+22*s], fill=ABYSS)
-    d.ellipse([cx-13*s, cy-13*s, cx+13*s, cy+13*s], fill=AQUA)
+    d.ellipse([cx-13*s, cy-13*s, cx+13*s, cy+13*s], fill=TEAL)
     d.ellipse([cx-9*s, cy-10*s, cx-2*s, cy-3*s], fill=WHITE)
     return img if rounded else img.convert("RGB")
 
