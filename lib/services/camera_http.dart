@@ -45,6 +45,34 @@ class CameraHttp {
     return CameraResponse(r.statusCode, r.body);
   }
 
+  /// Otwiera długie połączenie (strumień zdarzeń) i zwraca dane w miarę ich nadchodzenia.
+  /// Bez limitu czasu na całą odpowiedź - strumień trwa, dopóki go nie zamkniemy.
+  Future<Stream<List<int>>> openStream(String url) async {
+    var res = await _open('GET', url);
+    if (res.statusCode == 401) {
+      final challenge = res.headers[HttpHeaders.wwwAuthenticateHeader]?.join(', ');
+      await res.drain<void>();
+      final digest = challenge == null ? null : digestChallenge(challenge);
+      _digest = digest == null ? null : parseChallenge(digest);
+      _nonceCount = 0;
+      res = await _open('GET', url);
+    }
+    if (res.statusCode != 200) {
+      final code = res.statusCode;
+      await res.drain<void>();
+      throw HttpException('HTTP $code');
+    }
+    return res;
+  }
+
+  Future<HttpClientResponse> _open(String method, String url) async {
+    final uri = Uri.parse(url);
+    final req = await _client.openUrl(method, uri).timeout(timeout);
+    final auth = _authHeader(method, uri);
+    if (auth != null) req.headers.set(HttpHeaders.authorizationHeader, auth);
+    return req.close().timeout(timeout);
+  }
+
   void close() => _client.close(force: true);
 
   Future<_RawResponse> _send(String method, String url, String? body, String? contentType) async {

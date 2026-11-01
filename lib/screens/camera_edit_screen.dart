@@ -4,6 +4,7 @@ import '../models/camera.dart';
 import '../models/discovered_channel.dart';
 import '../services/camera_api.dart';
 import '../services/camera_store.dart';
+import '../services/port_discovery.dart';
 import '../theme.dart';
 
 class CameraEditScreen extends StatefulWidget {
@@ -30,6 +31,7 @@ class _CameraEditScreenState extends State<CameraEditScreen> {
   bool _showPass = false;
   bool _testing = false;
   bool _discovering = false;
+  bool _findingPorts = false;
   String? _testResult;
   bool _testOk = false;
   String? _hostError;
@@ -71,6 +73,32 @@ class _CameraEditScreenState extends State<CameraEditScreen> {
       api.close();
     }
     if (mounted) setState(() => _testing = false);
+  }
+
+  /// Sam znajduje porty HTTP i RTSP (i markę) i wpisuje je w pola.
+  Future<void> _findPorts() async {
+    if (!_validate()) return;
+    setState(() {
+      _findingPorts = true;
+      _testResult = 'Szukanie portów ${_c.host} …';
+    });
+    final r = await PortDiscovery.discover(_c);
+    if (!mounted) return;
+    setState(() {
+      _findingPorts = false;
+      if (r.httpPort != null) _httpPort.text = '${r.httpPort}';
+      if (r.rtspPort != null) _rtspPort.text = '${r.rtspPort}';
+      if (r.brand != null) _c.brand = r.brand!;
+      _read();
+      _testOk = r.httpPort != null && r.rtspPort != null;
+      final found = [
+        if (r.brand != null) _c.brandLabel,
+        if (r.httpPort != null) 'port HTTP ${r.httpPort}',
+        if (r.rtspPort != null) 'port RTSP ${r.rtspPort}',
+      ].join(' · ');
+      _testResult = '${_testOk ? '✓' : '✗'} ${found.isEmpty ? 'Nie znaleziono portów' : found}'
+          '${r.message.isEmpty ? '' : '\n${r.message}'}';
+    });
   }
 
   /// Pyta rejestrator o kanały i dodaje wybrane kamery naraz.
@@ -144,7 +172,7 @@ class _CameraEditScreenState extends State<CameraEditScreen> {
     final preview = Camera.fromJson(_read().toJson());
     if (preview.host.isEmpty) preview.host = '<adres>';
     final scheme = Theme.of(context).colorScheme;
-    final busy = _testing || _discovering;
+    final busy = _testing || _discovering || _findingPorts;
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.camera == null ? 'Nowa kamera' : widget.camera!.name)),
@@ -168,6 +196,14 @@ class _CameraEditScreenState extends State<CameraEditScreen> {
               const SizedBox(width: 12),
               Expanded(child: _field(_httpPort, 'Port HTTP', keyboard: TextInputType.number)),
             ]),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: busy ? null : _findPorts,
+                icon: const Icon(Icons.auto_fix_high_rounded, size: 18),
+                label: Text(_findingPorts ? 'Szukanie portów…' : 'Wykryj porty automatycznie'),
+              ),
+            ),
           ]),
           _section(context, 'Logowanie', [
             _field(_user, 'Użytkownik', icon: Icons.person_outline),
@@ -262,7 +298,7 @@ class _CameraEditScreenState extends State<CameraEditScreen> {
 
   Widget _result(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final color = _testing || _discovering ? scheme.onSurfaceVariant : (_testOk ? Ocean.live : scheme.error);
+    final color = _testing || _discovering || _findingPorts ? scheme.onSurfaceVariant : (_testOk ? Ocean.live : scheme.error);
     return Padding(
       padding: const EdgeInsets.only(top: 16),
       child: Container(

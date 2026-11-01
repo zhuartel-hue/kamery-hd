@@ -9,11 +9,13 @@ import '../models/camera.dart';
 import '../models/camera_layout.dart';
 import '../services/camera_api.dart';
 import '../services/camera_store.dart';
+import '../services/event_service.dart';
 import '../services/thumbnails.dart';
 import '../theme.dart';
 import '../widgets/drag_swap.dart';
 import '../widgets/wordmark.dart';
 import 'camera_edit_screen.dart';
+import 'detections_screen.dart';
 import 'live_screen.dart';
 import 'playback_screen.dart';
 
@@ -124,6 +126,7 @@ class _CameraListScreenState extends State<CameraListScreen> {
 
   Future<void> _reload() async {
     final list = await _store.load();
+    EventService.instance.update(list);
     if (mounted) setState(() => _cameras = list);
   }
 
@@ -266,6 +269,24 @@ class _CameraListScreenState extends State<CameraListScreen> {
       titleSpacing: 20,
       title: const AriViewWordmark(fontSize: 22),
       actions: [
+        ListenableBuilder(
+          listenable: EventService.instance,
+          builder: (context, _) {
+            final events = EventService.instance;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Badge(
+                isLabelVisible: events.unread > 0,
+                label: Text('${events.unread}'),
+                child: IconButton.filledTonal(
+                  tooltip: 'Wykryte osoby',
+                  icon: Icon(events.enabled ? Icons.notifications_active_rounded : Icons.notifications_none_rounded),
+                  onPressed: () => _open(const DetectionsScreen()),
+                ),
+              ),
+            );
+          },
+        ),
         IconButton.filledTonal(
           tooltip: Theme.of(context).brightness == Brightness.dark ? 'Jasny motyw' : 'Ciemny motyw',
           icon: Icon(

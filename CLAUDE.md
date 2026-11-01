@@ -45,6 +45,9 @@ Plan i lista zadań: `docs/PLAN.md` – aktualizuj go po każdej zmianie.
 - `lib/models/` – kamera (adresy RTSP/HTTP dla obu marek), nagrania, układy.
 - `lib/services/camera_api.dart` – ISAPI (Hikvision) i CGI (Dahua): info, zdjęcia, PTZ,
   wykrywanie kanałów, wyszukiwanie nagrań (kilka wariantów zapytań, log w `searchLog`).
-- `lib/services/camera_http.dart` – własne uwierzytelnianie Digest.
+- `lib/services/camera_http.dart` – własne uwierzytelnianie Digest (także długie strumienie zdarzeń).
+- `lib/services/port_discovery.dart` – automatyczne wykrywanie portów HTTP/RTSP i marki.
+- `lib/services/event_parser.dart`, `event_service.dart` – zdarzenia „osoba” z kamer
+  (Hikvision alertStream, Dahua eventManager), lista wykryć w `screens/detections_screen.dart`.
 - `lib/screens/` – lista kamer, pełny ekran (`live_screen.dart`), nagrania, edycja kamery.
 - Wideo: `media_kit` (libmpv). Testy w `test/`.

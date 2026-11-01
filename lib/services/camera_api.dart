@@ -40,6 +40,12 @@ class CameraApi {
     return info.isEmpty ? 'Połączono' : info;
   }
 
+  /// Dowolne zapytanie GET pod ścieżką urządzenia, np. „/ISAPI/Security/adminAccess”.
+  Future<String> getText(String path) async {
+    final r = await _call(() => _http.get('${camera.httpBase}$path'));
+    return r.text;
+  }
+
   Future<Uint8List> snapshot() async {
     final r = await _call(() => _http.get(camera.snapshotUrl));
     final b = r.body;

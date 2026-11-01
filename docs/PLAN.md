@@ -6,6 +6,15 @@
 - Telefon w poziomie = same kamery na całym ekranie (wersja 1.0.13).
 - HD i cała szerokość w poziomie, kolor nr 12 #5EEAD4 i nowa ikona (wersja 1.0.15).
 
+- **Automatyczne wykrywanie portów** – przycisk „Wykryj porty automatycznie” w edycji kamery:
+  sprawdza porty web (80, 8080, 81…), rozpoznaje markę, odczytuje port RTSP z urządzenia
+  (Hikvision `/ISAPI/Security/adminAccess`, Dahua `configManager RTSP`), a gdy się nie da –
+  sprawdza typowe porty RTSP (554, 8554, 10554…).
+- **Wykrywanie osoby z kamer** – dzwonek na liście kamer: włącznik, lista wykryć ze zdjęciem
+  z chwili zdarzenia, powiadomienie w aplikacji. Zdarzenia: Hikvision `alertStream`
+  (wtargnięcie, linia, ruch z celem „człowiek”), Dahua `eventManager attach`
+  (CrossRegion/CrossLine z Human, SmartMotionHuman). Działa przy otwartej aplikacji.
+
 ## Wcześniejsze założenia
 
 1. **Przestawianie kamer przeciąganiem** – klient przytrzymuje kamerę i przeciąga ją
@@ -33,6 +42,11 @@
   VPN/DDNS, własny pośrednik w chmurze, chmury producentów).
 
 ## Później
+
+- Powiadomienia push przy zamkniętej aplikacji – wymagają płatnego konta Apple Developer
+  (99 USD/rok, darmowe Apple ID nie obsługuje push) i serwera pośredniczącego.
+- Wyszukiwanie kamer w całej sieci (SADP, ConfigTool, ONVIF WS-Discovery) – na iPhonie
+  wymaga zgody Apple na multicast (płatne konto).
 
 - Android (budowanie wyłączone do czasu, gdy aplikacja na iPhone'a będzie gotowa).
 - Nagrania z karty SD kamery – czekamy na „Szczegóły techniczne” z prawdziwej kamery.
