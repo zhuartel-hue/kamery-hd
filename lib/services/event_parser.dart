@@ -19,7 +19,7 @@ class PersonEvent {
 }
 
 /// Hikvision /ISAPI/Event/notification/alertStream - kolejne bloki XML
-/// <EventNotificationAlert> (strefa, linia, ruch z filtrem „człowiek” AcuSense).
+/// `<EventNotificationAlert>` (strefa, linia, ruch z filtrem „człowiek” AcuSense).
 class HikEventParser {
   String _buffer = '';
   static const _maxBuffer = 512 * 1024;
@@ -44,7 +44,7 @@ class HikEventParser {
   static String? _tag(String xml, String tag) =>
       RegExp('<$tag>([^<]*)</$tag>').firstMatch(xml)?.group(1)?.trim();
 
-  /// Zamienia jeden blok <EventNotificationAlert> na zdarzenie lub null, gdy to nie osoba.
+  /// Zamienia jeden blok `<EventNotificationAlert>` na zdarzenie lub null, gdy to nie osoba.
   static PersonEvent? parseAlert(String xml) {
     final type = (_tag(xml, 'eventType') ?? '').toLowerCase();
     final state = (_tag(xml, 'eventState') ?? 'active').toLowerCase();

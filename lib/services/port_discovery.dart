@@ -136,7 +136,7 @@ class PortDiscovery {
     return PortDiscoveryResult(httpPort: httpPort, rtspPort: rtspPort, brand: brand, message: notes.join(' · '));
   }
 
-  /// Hikvision /ISAPI/Security/adminAccess: lista <AdminAccessProtocol> z protokołem i portem.
+  /// Hikvision /ISAPI/Security/adminAccess: lista `<AdminAccessProtocol>` z protokołem i portem.
   static int? parseHikAdminAccess(String xml, String protocol) {
     for (final m in RegExp(r'<AdminAccessProtocol[ >](.*?)</AdminAccessProtocol>', dotAll: true).allMatches(xml)) {
       final block = m.group(1)!;
