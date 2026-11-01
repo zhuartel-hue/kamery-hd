@@ -1,7 +1,7 @@
 # AriView – kontekst projektu
 
-Aplikacja do podglądu kamer i rejestratorów (NVR/DVR) **Hikvision i Dahua**. Teraz
-skupiamy się tylko na **iPhonie** (Android wyłączony w CI do czasu, gdy aplikacja będzie gotowa).
+Aplikacja do podglądu kamer i rejestratorów (NVR/DVR) **Hikvision i Dahua**. Budujemy
+wersję na **iPhone'a** (`AriView.ipa`) i od 1.0.18 znów na **Androida** (`AriView.apk`, włączony 2026-11-01 na prośbę użytkownika).
 Plan i lista zadań: `docs/PLAN.md` – aktualizuj go po każdej zmianie.
 
 ## Użytkownik

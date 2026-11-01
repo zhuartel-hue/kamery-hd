@@ -15,6 +15,8 @@
   (wtargnięcie, linia, ruch z celem „człowiek”), Dahua `eventManager attach`
   (CrossRegion/CrossLine z Human, SmartMotionHuman). Działa przy otwartej aplikacji.
 
+- **Android** – budowanie `AriView.apk` znów włączone (2026-11-01).
+
 ## Wcześniejsze założenia
 
 1. **Przestawianie kamer przeciąganiem** – klient przytrzymuje kamerę i przeciąga ją
@@ -48,5 +50,4 @@
 - Wyszukiwanie kamer w całej sieci (SADP, ConfigTool, ONVIF WS-Discovery) – na iPhonie
   wymaga zgody Apple na multicast (płatne konto).
 
-- Android (budowanie wyłączone do czasu, gdy aplikacja na iPhone'a będzie gotowa).
 - Nagrania z karty SD kamery – czekamy na „Szczegóły techniczne” z prawdziwej kamery.

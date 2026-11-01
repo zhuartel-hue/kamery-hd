@@ -28,8 +28,6 @@ jobs:
   android:
     name: Android (APK)
     needs: test
-    # Na razie skupiamy się na iPhonie - Android wróci, gdy aplikacja będzie gotowa.
-    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -90,12 +88,11 @@ jobs:
 
   release:
     name: Publikacja do pobrania
-    needs: [ios]
+    needs: [ios, android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: ios
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
@@ -103,6 +100,8 @@ jobs:
           name: AriView 1.0.${{ github.run_number }}
           make_latest: true
           body: |
+            **Android:** pobierz `AriView.apk` na telefonie i otwórz plik (zezwól na instalację z tego źródła).
             **iPhone:** pobierz `AriView.ipa` na komputer i zainstaluj programem Sideloadly (instrukcja w README).
           files: |
+            AriView.apk
             AriView.ipa
