@@ -4,6 +4,7 @@
 
 - Przestawianie kamer przeciąganiem (wersja 1.0.13).
 - Telefon w poziomie = same kamery na całym ekranie (wersja 1.0.13).
+- HD i cała szerokość w poziomie, kolor nr 12 #5EEAD4 i nowa ikona (wersja 1.0.15).
 
 ## Wcześniejsze założenia
 
@@ -15,7 +16,7 @@
    cały ekran bez przewijania. Lista w poziomie: jedna kamera na cały ekran, przewijanie
    kolejnych.
 
-## W budowie (nowy kolor, HD w poziomie)
+## Szczegóły wersji 1.0.15
 
 - Telefon w poziomie: przeglądane kamery w jakości HD (strumień główny); pełny ekran
   jednej kamery przełącza się na HD po obróceniu, w pionie wraca do ustawienia kamery.
@@ -25,6 +26,8 @@
 
 ## Do zbadania
 
+- **Hik-Connect OpenAPI** – użytkownik rejestruje się na tpp.hikvision.com; po uzyskaniu
+  dostępu/SDK integrujemy logowanie przez chmurę Hikvision. Dahua – do zbadania.
 - **Logowanie klientów przez chmurę** – konto AriView, synchronizacja listy kamer,
   dostęp do kamer spoza sieci domowej (opcje opisane w rozmowie: konto + synchronizacja,
   VPN/DDNS, własny pośrednik w chmurze, chmury producentów).
