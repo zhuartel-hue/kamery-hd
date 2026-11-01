@@ -422,7 +422,18 @@ class _CameraListScreenState extends State<CameraListScreen> {
     return layout == CameraLayout.list ? _feed(g) : _blocks(g, layout);
   }
 
+  /// Zaokrąglone rogi kafli kamer (ustalenie z użytkownikiem). W poziomie (hd) obraz
+  /// wypełnia cały ekran, więc bez zaokrągleń.
+  static double _radius({bool compact = false, bool hd = false}) => hd ? 0 : (compact ? 10 : 14);
+
   Widget _tileFor(_Group g, Camera c, {required bool live, bool compact = false, bool hd = false}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(_radius(compact: compact, hd: hd)),
+      child: _dragTile(g, c, live: live, compact: compact, hd: hd),
+    );
+  }
+
+  Widget _dragTile(_Group g, Camera c, {required bool live, required bool compact, required bool hd}) {
     return DragSwap(
       key: ValueKey('drag-${c.id}'),
       id: c.id,
@@ -524,7 +535,10 @@ class _CameraListScreenState extends State<CameraListScreen> {
                 width: layout.cells[i].w * cw + (layout.cells[i].w - 1) * _gap,
                 height: layout.cells[i].h * ch + (layout.cells[i].h - 1) * _gap,
                 child: cams[i] == null
-                    ? const ColoredBox(color: Colors.black)
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(_radius(compact: true, hd: hd)),
+                        child: const ColoredBox(color: Colors.black),
+                      )
                     : _tileFor(g, cams[i]!, live: layout.liveAt(i), compact: layout != CameraLayout.list, hd: hd),
               ),
           ],

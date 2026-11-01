@@ -15,6 +15,8 @@
   (wtargnięcie, linia, ruch z celem „człowiek”), Dahua `eventManager attach`
   (CrossRegion/CrossLine z Human, SmartMotionHuman). Działa przy otwartej aplikacji.
 
+- **Zaokrąglone rogi kafli kamer** na liście i w układach.
+
 ## Wcześniejsze założenia
 
 1. **Przestawianie kamer przeciąganiem** – klient przytrzymuje kamerę i przeciąga ją

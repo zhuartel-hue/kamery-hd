@@ -33,6 +33,7 @@ Plan i lista zadań: `docs/PLAN.md` – aktualizuj go po każdej zmianie.
 - Nazwa: **AriView**. Kolor wiodący: nr 12 „Jasny turkus morski” `#5EEAD4` z gradientem
   do `#14B8A6` (`lib/theme.dart`, klasa `Ocean`). Ciemny i jasny motyw.
 - Ikona: litera „A” z obiektywem zamiast poprzeczki – `python3 tools/make_icons.py`.
+- **Kafle kamer mają zaokrąglone rogi** (lista 14 px, układy 10 px; w poziomie bez zaokrągleń).
 - Obraz kamer bez ramek, na całą szerokość; jedno dotknięcie = pełny ekran;
   przesuwanie palcem = następna/poprzednia kamera; PTZ tylko na żądanie.
 - Przyciski „Nagrania” i okrągły „Wróć” na dole po prawej (także w nagraniach).
